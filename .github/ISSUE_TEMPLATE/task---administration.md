@@ -1,6 +1,6 @@
 ---
 name: Task - Administration
-about: Create a task regarding the administration of the project
+about: Create a task regarding the administration of the WP
 title: "[ADM]"
 labels: administrative
 assignees: ''
