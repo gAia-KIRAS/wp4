@@ -5,37 +5,78 @@ from src.config.io_config import IOConfig
 
 
 class IO:
-    # Responsible for handling input and output
+    """
+    Responsible for handling the input and output.
+
+    Attributes:
+        _config: IOConfig object with the configuration of the input and output
+        _ssh_client: paramiko.SSHClient object with the SSH connection
+    """
     def __init__(self, io_config: IOConfig):
         self._config = io_config
         self._ssh_client = None
 
-    def open_connection(self):
-        # Open connection to the Kronos server through SSH
+    def open_connection(self) -> None:
+        """
+        Open a connection to the Kronos server through SSH.
+        Raise an exception if the connection fails.
+        """
         # Create an SSH client
         self._ssh_client = paramiko.SSHClient()
 
         # Automatically add the remote server's host key
         self._ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-        # Connect to the remote server
-        self._ssh_client.connect(self._config.server_name,
-                           username=self._config.username,
-                           password=self._config.password)
+        # Connect to the remote server and raise exception if connection fails
+        try:
+            self._ssh_client.connect(self._config.server_name,
+                                     username=self._config.username,
+                                     password=self._config.password)
+        except Exception as e:
+            raise Exception(f'Error: Could not connect to remote server. '
+                            f'Original error: {e}')
 
-    def close_connection(self):
+    def close_connection(self) -> None:
+        """
+        Close the SSH connection.
+        """
         # Close the SSH connection
         self._ssh_client.close()
 
-    def check_existance_dir(self, directory):
+    def check_existence_on_server(self, directory: str, file: str = None) -> None:
+        """
+        Check if a directory exists on the remote server. Can also check if a file exists in the directory.
+        If directory or file does not exist, raise an exception.
+
+        Args:
+            directory: string with the directory to check
+            file: (optional) string with the file to check
+        """
+
         # Check if directory exists. If not, raise an exception
         command = f'test -d {directory}/ && echo "True" || echo "False"'
         stdin, stdout, stderr = self._ssh_client.exec_command(command)
         if stdout.readlines()[0].strip() == 'False':
             raise Exception(f'Directory {directory} does not exist.')
 
-    def run_command(self, command):
-        # Run a command on the remote server
+        if file:
+            # Check if file exists. If not, raise an exception
+            command = f'test -f {directory}/{file} && echo "True" || echo "False"'
+            stdin, stdout, stderr = self._ssh_client.exec_command(command)
+            if stdout.readlines()[0].strip() == 'False':
+                raise Exception(f'File {file} does not exist in {directory}.')
+
+    def run_command(self, command: str):
+        """
+        Run a command on the remote server.
+
+        Args:
+            command: string with the command to run
+
+        Returns:
+            stdout.readlines() (list): list of strings with the output of the command
+        """
+        # Run the command
         stdin, stdout, stderr = self._ssh_client.exec_command(command)
 
         # Check for errors
@@ -45,18 +86,32 @@ class IO:
 
         return stdout.readlines()
 
-    def list_sentinel_files(self, year, tile, product):
-        # TODO: checks on the year, title, and product
+    def list_sentinel_files(self, year: int, tile: str, product: str) -> pd.DataFrame:
+        """
+        List all files in a given directory on the remote server.
 
-        dir = f'{self._config.base_input_dir}/{year}/{tile}/{product}'
-        self.check_existance_dir(dir)
+        Args:
+            year: year of the data
+            tile: Sentinel tile
+            product: product type
 
+        Returns:
+            df (pd.DataFrame): dataframe with the following columns
+        """
+        self.check_inputs_with_metadata(year, tile, product)
+
+        dir = f'{self._config.base_server_dir}/{year}/{tile}/{product}'
+        self.check_existence_on_server(dir)
+
+        # Run command to list all filenames and sizes
         res = self.run_command(f'cd {dir}; ls -sh')
 
         df = pd.DataFrame(res, columns=['filename'])
-        df[['size', 'filename']] = df['filename'].str.split(' ', expand=True)
-        # Filter out column with the total
-        df = df[df['size'] != 'total']
+        df[['size', 'filename']] = df['filename'].str.split(expand=True)
+        # Filter out files that are not .tif
+        df = df[df['filename'].str.endswith('.tif')]
+
+        # Convert size to Mb, store year, tile and product
         df['size'] = df['size'].str[:-1].astype('int64')
         df['year'] = year
         df['tile'] = tile
@@ -75,14 +130,73 @@ class IO:
         df['product_f'] = df[10].str.split('.', expand=True)[0]
         df['extension_f'] = df[10].str.split('.', expand=True)[1].str[:-1]
 
-        df.drop(columns=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 'filename'], inplace=True)
-        print(df
-              )
+        df.drop(columns=list(range(11)), inplace=True)
+
+        # Print summary
+        print(f'Found {len(df)} files in {dir}.')
+        print(f'Total size: {df["size"].sum()} Mb.')
+        print(f'Date range: {df["date_f"].min()} - {df["date_f"].max()}')
+
+        return df
+
+    def download_file(self, year: int, tile: str, product: str, filename: str):
+        """
+        Download a file from the remote server.
+
+        Args:
+            year: year of the data
+            tile: Sentinel tile
+            product: product type
+            filename: name of the file to download
+        """
+        self.check_inputs_with_metadata(year, tile, product)
+
+        dir = f'{self._config.base_server_dir}/{year}/{tile}/{product}'
+        self.check_existence_on_server(dir, filename)
+        local_dir = f'{self._config.base_local_dir}/{year}/{tile}/{product}'
+        self.check_existence_on_local(local_dir)
+
+        # Run command to download the file
+        self.run_command(f'cd {dir}; scp {filename} {local_dir}')
+
+    def check_inputs_with_metadata(self, year: int, tile: str, product: str) -> None:
+        """
+        Check if the tile, year and product are available according to metadata.
+
+        Args:
+            product: product type
+            tile: Sentinel tile
+            year: year of the data
+        """
+        assert year in self._config.available_years, f'Year {year} not available.'
+        assert tile in self._config.available_tiles, f'Tile {tile} not available.'
+        assert product in self._config.available_products, f'Product {product} not available.'
+
+    def check_existence_on_local(self, local_dir):
+        pass
 
 
 if __name__ == '__main__':
+    """
+    List all files in the input directory and save them to a csv file.
+    This code is just for testing purposes, will be removed later.
+    """
     io_config = IOConfig()
     io = IO(io_config)
     io.open_connection()
-    io.list_sentinel_files('2018', '33TUM', 'NDVI_raw')
+    # df = pd.DataFrame()
+    # for tile in io_config.available_tiles:
+    #     for year in io_config.available_years:
+    #         for product in io_config.available_products:
+    #             print(f'\nListing files for {year}, {tile}, {product}')
+    #             df = pd.concat([df, io.list_sentinel_files(year, tile, product)])
+    # df.to_csv('sentinel_files.csv', index=False)
+
+    year, tile, prod = 2021, '33TUM', 'NDVI_raw'
+    df = io.list_sentinel_files(year, tile, prod)
+    filename = df.filename.iloc[0]
+
+    io.download_file(year, tile, prod, filename)
+
     io.close_connection()
+
