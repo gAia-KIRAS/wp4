@@ -1,5 +1,6 @@
 import paramiko
 import pandas as pd
+import os
 
 from src.config.io_config import IOConfig
 
@@ -93,31 +94,37 @@ class IO:
         Args:
             year: year of the data
             tile: Sentinel tile
-            product: product type
+            product: product type. Can be ['NDVI_raw', 'B02', 'B03', 'B04', 'B08', 'B11', 'SCL']
 
         Returns:
             df (pd.DataFrame): dataframe with the following columns
         """
         self.check_inputs_with_metadata(year, tile, product)
 
-        dir = f'{self._config.base_server_dir}/{year}/{tile}/{product}'
+        if product == 'NDVI_raw':
+            dir = f'{self._config.base_server_dir}/{year}/{tile}/{product}'
+        else:
+            dir = f'{self._config.base_server_dir}/{year}/{tile}/tmp'
+
+        # Check if directory exists
         self.check_existence_on_server(dir)
 
         # Run command to list all filenames and sizes
         res = self.run_command(f'cd {dir}; ls -sh')
-
         df = pd.DataFrame(res, columns=['filename'])
+
         df[['size', 'filename']] = df['filename'].str.split(expand=True)
         # Filter out files that are not .tif
         df = df[df['filename'].str.endswith('.tif')]
 
         # Convert size to Mb, store year, tile and product
-        df['size'] = df['size'].str[:-1].astype('int64')
+        df['size'] = df['size'].str[:-1].astype('float')
         df['year'] = year
         df['tile'] = tile
         df['product'] = product
 
         df = df.join(df['filename'].str.split('_', expand=True))
+
         # We denote colname_f if the columns are reconstructed from the filename
         df['built_tile_f'] = df[0] + df[1] + df[2]
         df['year_f'] = df[3]
@@ -127,13 +134,18 @@ class IO:
         df['date_f'] = pd.to_datetime(df[7], format='%Y%m%d')
         df['y_f'] = df[8]
         df['base_product_f'] = df[9]
-        df['product_f'] = df[10].str.split('.', expand=True)[0]
-        df['extension_f'] = df[10].str.split('.', expand=True)[1].str[:-1]
+
+        product_map = {'NDVI': 'NDVI_raw'}
+        df['product_f'] = df[10].str.split('.', expand=True)[0].map(lambda x: product_map.get(x, x))
+        df['extension_f'] = df[10].str.split('.', expand=True)[1]
 
         df.drop(columns=list(range(11)), inplace=True)
 
+        # Filter by product
+        df = df[df['product_f'] == product]
+
         # Print summary
-        print(f'Found {len(df)} files in {dir}.')
+        print(f'Found {len(df)} files for: \n - year = {year}\n - tile = {tile}\n - product = {product}.')
         print(f'Total size: {df["size"].sum()} Mb.')
         print(f'Date range: {df["date_f"].min()} - {df["date_f"].max()}')
 
@@ -151,13 +163,16 @@ class IO:
         """
         self.check_inputs_with_metadata(year, tile, product)
 
-        dir = f'{self._config.base_server_dir}/{year}/{tile}/{product}'
+        if product == 'NDVI_raw':
+            dir = f'{self._config.base_server_dir}/{year}/{tile}/{product}'
+        else:
+            dir = f'{self._config.base_server_dir}/{year}/{tile}/tmp'
         self.check_existence_on_server(dir, filename)
         local_dir = f'{self._config.base_local_dir}/{year}/{tile}/{product}'
         self.check_existence_on_local(local_dir)
 
-        # Run command to download the file
-        self.run_command(f'cd {dir}; scp {filename} {local_dir}')
+        sftp = self._ssh_client.open_sftp()
+        sftp.get(f'{dir}/{filename}', f'{local_dir}/{filename}')
 
     def check_inputs_with_metadata(self, year: int, tile: str, product: str) -> None:
         """
@@ -173,7 +188,14 @@ class IO:
         assert product in self._config.available_products, f'Product {product} not available.'
 
     def check_existence_on_local(self, local_dir):
-        pass
+        """
+        Check if a directory exists on the local machine. If not, create it.
+
+        Args:
+            local_dir: string with the directory to check
+        """
+        if not os.path.exists(local_dir):
+            os.makedirs(local_dir)
 
 
 if __name__ == '__main__':
@@ -184,19 +206,19 @@ if __name__ == '__main__':
     io_config = IOConfig()
     io = IO(io_config)
     io.open_connection()
-    # df = pd.DataFrame()
-    # for tile in io_config.available_tiles:
-    #     for year in io_config.available_years:
-    #         for product in io_config.available_products:
-    #             print(f'\nListing files for {year}, {tile}, {product}')
-    #             df = pd.concat([df, io.list_sentinel_files(year, tile, product)])
-    # df.to_csv('sentinel_files.csv', index=False)
+    df = pd.DataFrame()
+    for tile in io_config.available_tiles:
+        for year in io_config.available_years:
+            for product in io_config.available_products:
+                print(f'\nListing files for {year}, {tile}, {product}')
+                df = pd.concat([df, io.list_sentinel_files(year, tile, product)])
+    df.to_csv('sentinel_files.csv', index=False)
 
     year, tile, prod = 2021, '33TUM', 'NDVI_raw'
     df = io.list_sentinel_files(year, tile, prod)
     filename = df.filename.iloc[0]
-
-    io.download_file(year, tile, prod, filename)
+    #
+    # io.download_file(year, tile, prod, filename)
 
     io.close_connection()
 
