@@ -6,15 +6,9 @@ class Config:
     # Responsible for storing the configuration of the main application
     def __init__(self):
         # Use parent directory as root
-        self._root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self._root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self._config_path = os.path.join(self._root, 'config.yaml')
         self._config = self.load_config()
-
-        # Build paths
-        self._data_path = os.path.join(self._root, self._config['paths']['data'])
-        self._data_input_path = os.path.join(self._data_path, self._config['paths']['input'])
-        self._data_output_path = os.path.join(self._data_path, self._config['paths']['output'])
-        self._data_inter_path = os.path.join(self._data_path, self._config['paths']['inter'])
 
         # Profiling
         self._profiling_active = self._config['profiling']['active']
@@ -28,18 +22,6 @@ class Config:
             # use safe_load instead load
             config = yaml.safe_load(f)
         return config
-
-    @property
-    def data_input_path(self) -> str:
-        return self._data_input_path
-
-    @property
-    def data_output_path(self) -> str:
-        return self._data_output_path
-
-    @property
-    def data_inter_path(self) -> str:
-        return self._data_inter_path
 
     @property
     def profiling_active(self) -> bool:
