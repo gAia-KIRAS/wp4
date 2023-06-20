@@ -168,8 +168,8 @@ class IO:
         else:
             dir = f'{self._config.base_server_dir}/{year}/{tile}/tmp'
         self.check_existence_on_server(dir, filename)
-        local_dir = f'{self._config.base_local_dir}/{year}/{tile}/{product}'
-        self.check_existence_on_local(local_dir)
+        local_dir = f'{self._config.base_local_dir}/raw/{year}/{tile}/{product}'
+        self.check_existence_on_local(local_dir, dir=True)
 
         sftp = self._ssh_client.open_sftp()
         sftp.get(f'{dir}/{filename}', f'{local_dir}/{filename}')
@@ -187,15 +187,27 @@ class IO:
         assert tile in self._config.available_tiles, f'Tile {tile} not available.'
         assert product in self._config.available_products, f'Product {product} not available.'
 
-    def check_existence_on_local(self, local_dir):
+    @staticmethod
+    def check_existence_on_local(local_path: str, dir: bool = False):
         """
-        Check if a directory exists on the local machine. If not, create it.
+        Check if a directory or file exists on the local machine.
+        If it is a directory and does not exist, create it.
+        If it is a file and does not exist, raise an error.
 
         Args:
-            local_dir: string with the directory to check
+            local_path: string with the directory to check
+            dir: boolean indicating if the path is a directory or not
         """
-        if not os.path.exists(local_dir):
-            os.makedirs(local_dir)
+        if dir:
+            if not os.path.isdir(local_path):
+                os.makedirs(local_path)
+        else:
+            if not os.path.isfile(local_path):
+                raise Exception(f'File {local_path} does not exist.')
+
+    @property
+    def config(self):
+        return self._config
 
 
 if __name__ == '__main__':
@@ -206,19 +218,19 @@ if __name__ == '__main__':
     io_config = IOConfig()
     io = IO(io_config)
     io.open_connection()
-    df = pd.DataFrame()
-    for tile in io_config.available_tiles:
-        for year in io_config.available_years:
-            for product in io_config.available_products:
-                print(f'\nListing files for {year}, {tile}, {product}')
-                df = pd.concat([df, io.list_sentinel_files(year, tile, product)])
-    df.to_csv('sentinel_files.csv', index=False)
+    # df = pd.DataFrame()
+    # for tile in io_config.available_tiles:
+    #     for year in io_config.available_years:
+    #         for product in io_config.available_products:
+    #             print(f'\nListing files for {year}, {tile}, {product}')
+    #             df = pd.concat([df, io.list_sentinel_files(year, tile, product)])
+    # df.to_csv('sentinel_files.csv', index=False)
 
-    year, tile, prod = 2021, '33TUM', 'NDVI_raw'
+    year, tile, prod = 2021, '33TUN', 'NDVI_raw'
     df = io.list_sentinel_files(year, tile, prod)
     filename = df.filename.iloc[0]
 
-    # io.download_file(year, tile, prod, filename)
+    io.download_file(year, tile, prod, filename)
 
     io.close_connection()
 
