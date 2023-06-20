@@ -19,6 +19,9 @@ class IOConfig:
         # Build paths
         self._base_local_dir = os.path.join(self._root, self._config['paths']['base_local_dir'])
 
+        self._aoi_path = os.path.join(self._base_local_dir, self._config['files']['aoi'])
+        self._inventory_path = os.path.join(self._base_local_dir, self._config['files']['inventory'])
+
     def load_config(self) -> dict:
         """
         Loads the configuration file.
@@ -49,7 +52,7 @@ class IOConfig:
 
     @property
     def base_local_dir(self) -> str:
-        return self._config['paths']['base_local_dir']
+        return self._base_local_dir
 
     @property
     def available_tiles(self) -> list:
@@ -62,3 +65,11 @@ class IOConfig:
     @property
     def available_products(self) -> list:
         return self._config['metadata']['products']
+
+    @property
+    def aoi_path(self) -> str:
+        return self._aoi_path
+
+    @property
+    def inventory_path(self) -> str:
+        return self._inventory_path
