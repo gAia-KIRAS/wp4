@@ -2,3 +2,6 @@ config.yaml
 io_config.yaml
 *.csv
 *.gpkg
+*.kml
+*.tif
+*.aux.xml
