@@ -3,6 +3,7 @@ from typing import List, Tuple
 import paramiko
 import pandas as pd
 import os
+import warnings
 
 from src.config.io_config import IOConfig
 from src.utils import ImageRef, TileRef
@@ -47,28 +48,31 @@ class IO:
         # Close the SSH connection
         self._ssh_client.close()
 
-    def check_existence_on_server(self, directory: str, file: str = None) -> None:
+    def check_existence_on_server(self, remote_path: str, dir: bool = False) -> None:
         """
-        Check if a directory exists on the remote server. Can also check if a file exists in the directory.
-        If directory or file does not exist, raise an exception.
+        Check if a directory exists on the remote server. If it is a directory and does not exist, create it.
+        If it is a file and does not exist, raise an error.
 
         Args:
-            directory: string with the directory to check
-            file: (optional) string with the file to check
+            remote_path: string with the path to check
+            dir: boolean indicating whether the path is a directory. Otherwise, it is a file.
         """
 
-        # Check if directory exists. If not, raise an exception
-        command = f'test -d {directory}/ && echo "True" || echo "False"'
-        stdin, stdout, stderr = self._ssh_client.exec_command(command)
-        if stdout.readlines()[0].strip() == 'False':
-            raise Exception(f'Directory {directory} does not exist.')
-
-        if file:
-            # Check if file exists. If not, raise an exception
-            command = f'test -f {directory}/{file} && echo "True" || echo "False"'
+        if dir:
+            # Check if directory exists. If not, raise an exception
+            command = f'test -d {remote_path}/ && echo "True" || echo "False"'
             stdin, stdout, stderr = self._ssh_client.exec_command(command)
             if stdout.readlines()[0].strip() == 'False':
-                raise Exception(f'File {file} does not exist in {directory}.')
+                # Create the directory
+                command = f'mkdir {remote_path}'
+                stdin, stdout, stderr = self._ssh_client.exec_command(command)
+
+        else:
+            # Check if file exists. If not, raise an exception
+            command = f'test -f {remote_path} && echo "True" || echo "False"'
+            stdin, stdout, stderr = self._ssh_client.exec_command(command)
+            if stdout.readlines()[0].strip() == 'False':
+                raise Exception(f'File {remote_path} does not exist.')
 
     def run_command(self, command: str):
         """
@@ -176,10 +180,11 @@ class IO:
 
         try:
             self.check_existence_on_local(f'{local_dir}/{image.filename}')
-            raise Warning(f'File {image.filename} already exists on local machine. Will not be downloaded')
+            warnings.warn(f'File {image.filename} already exists on local machine. Will not be downloaded')
         except FileNotFoundError as e:
             sftp = self._ssh_client.open_sftp()
             sftp.get(f'{dir}/{image.filename}', f'{self._config.base_local_dir}/{image.rel_filepath()}')
+            sftp.close()
 
     def check_inputs_with_metadata(self, tile_ref: TileRef) -> None:
         """
@@ -220,18 +225,36 @@ class IO:
         self.check_inputs_with_metadata(image.tile_ref)
 
         if image.product == 'NDVI_raw':
-            dir = f'{self._config.base_server_dir}/{image.year}/{image.tile}/{image.product}'
+            remote_dir = f'{self._config.base_server_dir}/{image.tile_ref.to_subpath()}'
         else:
-            dir = f'{self._config.base_server_dir}/{image.year}/{image.tile}/tmp'
-        self.check_existence_on_server(dir, image.filename)
+            remote_dir = f'{self._config.base_server_dir}/{image.year}/{image.tile}/tmp'
+        self.check_existence_on_server(remote_dir, dir=True)
+        self.check_existence_on_server(f'{remote_dir}/{image.filename}', dir=False)
 
-        local_dir = f'{self._config.base_local_dir}/raw/{image.year}/{image.tile}/{image.product}'
+        local_dir = f'{self._config.base_local_dir}/raw/{image.tile_ref.to_subpath()}'
         self.check_existence_on_local(local_dir, dir=True)
 
-
-
         sftp = self._ssh_client.open_sftp()
-        sftp.put(f'{local_dir}/{image.filename}', f'{dir}/{image.filename}')
+        sftp.put(f'{local_dir}/{image.filename}', f'{remote_dir}/{image.filename}')
+
+    def delete_local_file(self, image: ImageRef):
+        """
+        Delete a file from the local machine.
+
+        Args:
+            image: ImageRef object with the image to delete
+        """
+        self.check_inputs_with_metadata(image.tile_ref)
+
+        local_dir = f'{self._config.base_local_dir}/{image.rel_dir()}'
+        self.check_existence_on_local(local_dir, dir=True)
+        try:
+            self.check_existence_on_local(f'{local_dir}/{image.filename}', dir=False)
+        except FileNotFoundError as e:
+            warnings.warn(f'File {image.filename} does not exist on local machine. Will not be deleted')
+            return
+
+        os.remove(f'{local_dir}/{image.filename}')
 
     @property
     def config(self):

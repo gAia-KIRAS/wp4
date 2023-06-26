@@ -18,6 +18,7 @@ class IOConfig:
 
         # Build paths
         self._base_local_dir = os.path.join(self._root, self._config['paths']['base_local_dir'])
+        self._temp_dir = os.path.join(self._base_local_dir, self._config['paths']['temp_dir'])
 
         self._aoi_path = os.path.join(self._base_local_dir, self._config['files']['aoi'])
         self._inventory_path = os.path.join(self._base_local_dir, self._config['files']['inventory'])
@@ -49,6 +50,10 @@ class IOConfig:
     @property
     def base_server_dir(self) -> str:
         return self._config['paths']['base_server_dir']
+
+    @property
+    def temp_dir(self) -> str:
+        return self._temp_dir
 
     @property
     def base_local_dir(self) -> str:

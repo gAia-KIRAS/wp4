@@ -47,12 +47,25 @@ class ImageRef:
                 raise Exception('year, tile and product must be set if TileRef is not set.')
             self.tile_ref = TileRef(self.year, self.tile, self.product)
 
-    def rel_filepath(self):
+    def rel_filepath(self) -> str:
+        """
+        Build the relative filepath of the image. Examples:
+        - raw/NDVI_raw/2019/33TUM/33_T_UM_2021_10_S2A_33TUM_20211010_0_L2A_NDVI.tif
+        - crop/B03/2018/33TUN/33_T_UM_2021_10_S2A_33TUM_20211010_0_L2A_NDVI.tif
+
+        Returns:
+            string with the relative filepath
+        """
         if not self.type:
             raise Exception('Type of image not set. Relative filepath cannot be built.')
         return f'{self.type}/{self.tile_ref.to_subpath()}/{self.filename}'
 
-    def rel_dir(self):
+    def rel_dir(self) -> str:
+        """
+        Same as rel_filepath, but just build the relative directory of the image.
+        Returns:
+string      with the relative directory
+        """
         if not self.type:
             raise Exception('Type of image not set. Relative directory cannot be built.')
         return f'{self.type}/{self.tile_ref.to_subpath()}'
