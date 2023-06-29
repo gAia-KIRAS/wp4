@@ -70,8 +70,8 @@ class NCI:
         - saved using tf.saved_model.save
         - will be loaded using tf.saved_model.load
         - for image_1 -> image_2 will be saved in the directory of image_1
-        - will have name: 'nci' + image_1.year + image_1.tile + image_1.date
-        - will be placed in directory image_1.year + image_1.tile + 'nci'
+        - will have name: '{nci}_{image_1.year}_{image_1.tile}_{image_1.date}'
+        - will be placed in directory '{base_server_dir}/{nci}/{image_1.year}/{image_1.tile}/{image_1.date}'
 
         Args:
             nci: tf.Tensor with the NCI to save
