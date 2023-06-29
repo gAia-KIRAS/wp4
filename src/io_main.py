@@ -1,6 +1,6 @@
 from src.config.io_config import IOConfig
 from src.io_manager import IO
-from src.utils import TileRef
+from src.utils import TileRef, ImageRef
 
 import pandas as pd
 
@@ -12,7 +12,6 @@ def check_dates():
 
     io_config = IOConfig()
     io = IO(io_config)
-    io.open_connection()
     tiles = io_config.available_tiles
     years = io_config.available_years
     dates = {}
@@ -37,7 +36,6 @@ def list_all_files_and_save():
     """
     io_config = IOConfig()
     io = IO(io_config)
-    io.open_connection()
     df = pd.DataFrame()
     for tile in io_config.available_tiles:
         for year in io_config.available_years:
@@ -54,7 +52,6 @@ def test_file_download():
     """
     io_config = IOConfig()
     io = IO(io_config)
-    io.open_connection()
     tile_ref = TileRef(2021, '33TUN', 'NDVI_raw')
     refs, df = io.list_sentinel_files(tile_ref)
     image = refs[0]
@@ -68,7 +65,6 @@ def test_extract_date():
     """
     io_config = IOConfig()
     io = IO(io_config)
-    io.open_connection()
     tile_ref = TileRef(2021, '33TUN', 'NDVI_raw')
     refs, df = io.list_sentinel_files(tile_ref)
     image = refs[0]
@@ -77,9 +73,33 @@ def test_extract_date():
     io.close_connection()
 
 
+def test_file_upload():
+    """
+    Test the upload of a single file.
+    """
+    io_config = IOConfig()
+    io = IO(io_config)
+    image = ImageRef('crop_NDVI_raw_2021_33TUN_20211017.tif', year=2021, tile='33TUN', product='NDVI_raw', type='crop')
+    io.upload_file(image)
+    io.close_connection()
+
+
+def test_file_removal_on_server():
+    """
+    Test the removal of a single file.
+    """
+    io_config = IOConfig()
+    io = IO(io_config)
+    image = ImageRef('crop_NDVI_raw_2021_33TUN_20211017.tif', year=2021, tile='33TUN', product='NDVI_raw', type='crop')
+    io.delete_remote_file(image)
+    io.close_connection()
+
+
 if __name__ == '__main__':
     # list_all_files_and_save()
     # test_file_download()
+    # test_file_upload()
+    test_file_removal_on_server()
     # check_dates()
 
-    test_extract_date()
+    # test_extract_date()

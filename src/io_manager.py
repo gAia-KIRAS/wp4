@@ -17,11 +17,13 @@ class IO:
         _config: IOConfig object with the configuration of the input and output
         _ssh_client: paramiko.SSHClient object with the SSH connection
     """
+
     def __init__(self, io_config: IOConfig):
         self._config = io_config
         self._ssh_client = None
+        self._open_connection()
 
-    def open_connection(self) -> None:
+    def _open_connection(self) -> None:
         """
         Open a connection to the Kronos server through SSH.
         Raise an exception if the connection fails.
@@ -64,7 +66,7 @@ class IO:
             stdin, stdout, stderr = self._ssh_client.exec_command(command)
             if stdout.readlines()[0].strip() == 'False':
                 # Create the directory
-                command = f'mkdir {remote_path}'
+                command = f'mkdir -p {remote_path}'
                 stdin, stdout, stderr = self._ssh_client.exec_command(command)
 
         else:
@@ -72,7 +74,7 @@ class IO:
             command = f'test -f {remote_path} && echo "True" || echo "False"'
             stdin, stdout, stderr = self._ssh_client.exec_command(command)
             if stdout.readlines()[0].strip() == 'False':
-                raise Exception(f'File {remote_path} does not exist.')
+                raise FileNotFoundError(f'File {remote_path} does not exist.')
 
     def run_command(self, command: str):
         """
@@ -96,7 +98,7 @@ class IO:
 
     def list_sentinel_files(self, tile_ref: TileRef) -> Tuple[List[ImageRef], pd.DataFrame]:
         """
-        List all files in a given directory on the remote server.
+        List all Sentinel files (type='raw') for a particular tile reference (tile + product + year).
 
         Args:
             tile_ref (TileRef): TileRef object with the tile to list files from
@@ -107,10 +109,11 @@ class IO:
         """
         self.check_inputs_with_metadata(tile_ref)
 
+        image_type = 'wp3/sentinel2_L2A'
         if tile_ref.product == 'NDVI_raw':
-            dir = f'{self._config.base_server_dir}/{tile_ref.to_subpath()}'
+            dir = f'{self._config.base_server_dir}/{image_type}/{tile_ref.to_subpath()}'
         else:
-            dir = f'{self._config.base_server_dir}/{tile_ref.year}/{tile_ref.tile}/tmp'
+            dir = f'{self._config.base_server_dir}/{image_type}/{tile_ref.year}/{tile_ref.tile}/tmp'
 
         # Check if directory exists
         self.check_existence_on_server(dir, dir=True)
@@ -161,29 +164,51 @@ class IO:
 
         return i_refs, df
 
-    def download_file(self, image: ImageRef):
+    def build_remote_dir(self, image: ImageRef) -> str:
         """
-        Download a file from the remote server.
+        Build the remote directory where the image is located. For type = "raw", the remote base directory is
+        wp3/sentinel2_L2A. For any other type, the remote base directory is wp4/{type}.
 
         Args:
             image: reference to the image to download
         """
+        if image.type is None:
+            raise Exception('Cannot build remote directory. Image type must be specified.')
+        rel_dir = {'raw': "wp3/sentinel2_L2A"}.get(image.type, f"wp4/{image.type}") + f"/{image.year}/{image.tile}"
+
+        if image.product == 'NDVI_raw' or image.type != 'raw':
+            rel_dir += f'/{image.product}'
+        else:
+            # Only raw non-NDVI files are stored in a tmp folder
+            rel_dir += f"/tmp"
+
+        return f"{self._config.base_server_dir}/{rel_dir}"
+
+    def download_file(self, image: ImageRef):
+        """
+        Download a file from the remote server. If the file already exists locally, it will not be downloaded.
+
+        Args:
+            image: reference to the image to download
+        """
+        print(f'Downloading image {image} from server')
         self.check_inputs_with_metadata(image.tile_ref)
 
-        if image.product == 'NDVI_raw':
-            dir = f'{self._config.base_server_dir}/{image.tile_ref.to_subpath()}'
-        else:
-            dir = f'{self._config.base_server_dir}/{image.year}/{image.tile}/tmp'
-        self.check_existence_on_server(dir, image.filename)
+        dir = self.build_remote_dir(image)
+        filepath = f'{dir}/{image.filename}'
+        self.check_existence_on_server(dir, dir=True)
+        self.check_existence_on_server(filepath, dir=False)
+
         local_dir = f'{self._config.base_local_dir}/{image.rel_dir()}'
+        local_filepath = f'{self._config.base_local_dir}/{image.rel_filepath()}'
         self.check_existence_on_local(local_dir, dir=True)
 
         try:
-            self.check_existence_on_local(f'{local_dir}/{image.filename}')
-            warnings.warn(f'File {image.filename} already exists on local machine. Will not be downloaded')
+            self.check_existence_on_local(local_filepath)
+            warnings.warn(f'\nFile {image.filename} already exists on local machine. Will not be downloaded')
         except FileNotFoundError as e:
             sftp = self._ssh_client.open_sftp()
-            sftp.get(f'{dir}/{image.filename}', f'{self._config.base_local_dir}/{image.rel_filepath()}')
+            sftp.get(f'{dir}/{image.filename}', local_filepath)
             sftp.close()
 
     def check_inputs_with_metadata(self, tile_ref: TileRef) -> None:
@@ -222,20 +247,27 @@ class IO:
         Args:
             image: ImageRef object with the image to upload
         """
+        print(f'Uploading image {image} to server.')
         self.check_inputs_with_metadata(image.tile_ref)
 
-        if image.product == 'NDVI_raw':
-            remote_dir = f'{self._config.base_server_dir}/{image.tile_ref.to_subpath()}'
-        else:
-            remote_dir = f'{self._config.base_server_dir}/{image.year}/{image.tile}/tmp'
-        self.check_existence_on_server(remote_dir, dir=True)
-        self.check_existence_on_server(f'{remote_dir}/{image.filename}', dir=False)
+        dir = self.build_remote_dir(image)
+        filepath = f'{dir}/{image.filename}'
+        self.check_existence_on_server(dir, dir=True)
 
-        local_dir = f'{self._config.base_local_dir}/raw/{image.tile_ref.to_subpath()}'
+        try:
+            self.check_existence_on_server(filepath, dir=False)
+            warnings.warn(f'\nFile {image.filename} already exists on server. Overwritting it.')
+        except FileNotFoundError:
+            pass
+
+        local_dir = f'{self._config.base_local_dir}/{image.rel_dir()}'
         self.check_existence_on_local(local_dir, dir=True)
+        local_filepath = f'{self._config.base_local_dir}/{image.rel_filepath()}'
+        self.check_existence_on_local(local_filepath)
 
         sftp = self._ssh_client.open_sftp()
-        sftp.put(f'{local_dir}/{image.filename}', f'{remote_dir}/{image.filename}')
+        sftp.put(local_filepath, filepath)
+        sftp.close()
 
     def delete_local_file(self, image: ImageRef):
         """
@@ -244,6 +276,8 @@ class IO:
         Args:
             image: ImageRef object with the image to delete
         """
+        print(f'Deleting image {image} from local machine.')
+
         self.check_inputs_with_metadata(image.tile_ref)
 
         local_dir = f'{self._config.base_local_dir}/{image.rel_dir()}'
@@ -251,10 +285,23 @@ class IO:
         try:
             self.check_existence_on_local(f'{local_dir}/{image.filename}', dir=False)
         except FileNotFoundError as e:
-            warnings.warn(f'File {image.filename} does not exist on local machine. Will not be deleted')
+            warnings.warn(f'\nFile {image.filename} does not exist on local machine. Will not be deleted')
             return
 
         os.remove(f'{local_dir}/{image.filename}')
+
+    def delete_remote_file(self, image: ImageRef):
+        print(f'Deleting image {image} from server.')
+        self.check_inputs_with_metadata(image.tile_ref)
+
+        dir = self.build_remote_dir(image)
+        filepath = f'{dir}/{image.filename}'
+        self.check_existence_on_server(dir, dir=True)
+        self.check_existence_on_server(filepath, dir=False)
+
+        sftp = self._ssh_client.open_sftp()
+        sftp.remove(filepath)
+        sftp.close()
 
     @property
     def config(self):
