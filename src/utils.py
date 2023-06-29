@@ -13,6 +13,9 @@ class TileRef:
     def to_subpath(self):
         return f'{self.year}/{self.tile}/{self.product}'
 
+    def __str__(self):
+        return f'Year: {self.year} | Tile: {self.tile} | Product: {self.product}'
+
 
 @dataclass
 class ImageRef:
@@ -64,9 +67,12 @@ class ImageRef:
         """
         Same as rel_filepath, but just build the relative directory of the image.
         Returns:
-string      with the relative directory
+            string with the relative directory
         """
         if not self.type:
             raise Exception('Type of image not set. Relative directory cannot be built.')
         return f'{self.type}/{self.tile_ref.to_subpath()}'
 
+    def __str__(self):
+        return f'Filename: {self.filename} | Year: {self.year} | Tile: {self.tile} | ' \
+               f'Product: {self.product} | Type: {self.type}'
