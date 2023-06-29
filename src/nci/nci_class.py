@@ -89,7 +89,7 @@ class NCI:
         filepath = f'{local_dir}/{new_image.filename}'
         try:
             self._io.check_existence_on_local(filepath, dir=False)
-            warnings.warn(f'NCI {new_image.filename} already exists. Overwriting it.')
+            warnings.warn(f'\nNCI {new_image.filename} already exists. Overwriting it.')
         except FileNotFoundError:
             pass
         tf.saved_model.save(nci, filepath)
