@@ -110,10 +110,10 @@ class IO:
         if tile_ref.product == 'NDVI_raw':
             dir = f'{self._config.base_server_dir}/{tile_ref.to_subpath()}'
         else:
-            dir = f'{self._config.base_server_dir}/{year}/{tile}/tmp'
+            dir = f'{self._config.base_server_dir}/{tile_ref.year}/{tile_ref.tile}/tmp'
 
         # Check if directory exists
-        self.check_existence_on_server(dir)
+        self.check_existence_on_server(dir, dir=True)
 
         # Run command to list all filenames and sizes
         res = self.run_command(f'cd {dir}; ls -sh')
@@ -259,31 +259,3 @@ class IO:
     @property
     def config(self):
         return self._config
-
-
-if __name__ == '__main__':
-    """
-    List all files in the input directory and save them to a csv file.
-    This code is just for testing purposes, will be removed later.
-    """
-    io_config = IOConfig()
-    io = IO(io_config)
-    io.open_connection()
-    # df = pd.DataFrame()
-    # for tile in io_config.available_tiles:
-    #     for year in io_config.available_years:
-    #         for product in io_config.available_products:
-    #             print(f'\nListing files for {year}, {tile}, {product}')
-    #             df = pd.concat([df, io.list_sentinel_files(year, tile, product)[1]])
-    # df.to_csv('sentinel_files.csv', index=False)
-
-    tile_ref = TileRef(2021, '33TUN', 'NDVI_raw')
-    refs, df = io.list_sentinel_files(tile_ref)
-    # filename = df.filename.iloc[0]
-    image = refs[0]
-    image.type = 'raw'
-
-    io.download_file(image)
-
-    io.close_connection()
-
