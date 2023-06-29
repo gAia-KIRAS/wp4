@@ -62,7 +62,24 @@ def test_file_download():
     io.close_connection()
 
 
+def test_extract_date():
+    """
+    Test the extraction of the date from the filename.
+    """
+    io_config = IOConfig()
+    io = IO(io_config)
+    io.open_connection()
+    tile_ref = TileRef(2021, '33TUN', 'NDVI_raw')
+    refs, df = io.list_sentinel_files(tile_ref)
+    image = refs[0]
+    print(image.filename)
+    print(image.extract_date())
+    io.close_connection()
+
+
 if __name__ == '__main__':
     # list_all_files_and_save()
     # test_file_download()
-    check_dates()
+    # check_dates()
+
+    test_extract_date()

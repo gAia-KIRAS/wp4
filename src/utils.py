@@ -52,7 +52,8 @@ class ImageRef:
 
     def rel_filepath(self) -> str:
         """
-        Build the relative filepath of the image. Examples:
+        Build the relative filepath of the image: {type}/{product}/{year}/{product}/{filename}.
+        Examples:
         - raw/NDVI_raw/2019/33TUM/33_T_UM_2021_10_S2A_33TUM_20211010_0_L2A_NDVI.tif
         - crop/B03/2018/33TUN/33_T_UM_2021_10_S2A_33TUM_20211010_0_L2A_NDVI.tif
 
@@ -65,7 +66,11 @@ class ImageRef:
 
     def rel_dir(self) -> str:
         """
-        Same as rel_filepath, but just build the relative directory of the image.
+        Same as rel_filepath, but just build the relative directory of the image:
+         {type}/{product}/{year}/{product}. Examples:
+        - raw/NDVI_raw/2019/33TUM
+        - crop/B03/2018/33TUN
+
         Returns:
             string with the relative directory
         """
@@ -76,3 +81,22 @@ class ImageRef:
     def __str__(self):
         return f'Filename: {self.filename} | Year: {self.year} | Tile: {self.tile} | ' \
                f'Product: {self.product} | Type: {self.type}'
+
+    def extract_date(self):
+        """
+        Extract date from the filepath.
+        """
+        if self.type is None:
+            raise Exception('Type of image not set. Date cannot be extracted.')
+        if self.type == 'raw':
+            date = self.filename.split('_')[7]
+        elif self.type == 'crop':
+            date = self.filename.split('_')[-1]
+        else:
+            raise Exception("Type of image not in ['raw', 'crop']. Date cannot be extracted.")
+
+        # Check it is an appropriate date
+        if len(date) != 8 or not date.isdigit():
+            raise Exception(f'Could not extract date. '
+                            f'Filename: {self.filename}, type: {self.type}, extracted date: {date}')
+        return date

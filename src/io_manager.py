@@ -157,7 +157,7 @@ class IO:
         print(f'Date range: {df["date_f"].min()} - {df["date_f"].max()}')
 
         # Create list of ImageRef objects
-        i_refs = [ImageRef(f, tile_ref=tile_ref) for f in df.filename.values.tolist()]
+        i_refs = [ImageRef(f, tile_ref=tile_ref, type='raw') for f in df.filename.values.tolist()]
 
         return i_refs, df
 
