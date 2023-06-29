@@ -159,6 +159,9 @@ class IO:
         print(f'Total size: {df["size"].sum()} Mb.')
         print(f'Date range: {df["date_f"].min()} - {df["date_f"].max()}')
 
+        # Sort by date
+        df.sort_values(by='date_f', inplace=True)
+
         # Create list of ImageRef objects
         i_refs = [ImageRef(f, tile_ref=tile_ref, type='raw') for f in df.filename.values.tolist()]
 
@@ -174,7 +177,7 @@ class IO:
         """
         if image.type is None:
             raise Exception('Cannot build remote directory. Image type must be specified.')
-        rel_dir = {'raw': "wp3/sentinel2_L2A"}.get(image.type, f"wp4/{image.type}") + f"/{image.year}/{image.tile}"
+        rel_dir = ("wp3/sentinel2_L2A" if image.type == 'raw' else f"wp4/{image.type}") + f"/{image.year}/{image.tile}"
 
         if image.product == 'NDVI_raw' or image.type != 'raw':
             rel_dir += f'/{image.product}'
@@ -298,6 +301,10 @@ class IO:
         filepath = f'{dir}/{image.filename}'
         self.check_existence_on_server(dir, dir=True)
         self.check_existence_on_server(filepath, dir=False)
+
+        # Make it impossible to delete files from the raw folder
+        if image.type == 'raw':
+            raise Exception('Cannot delete images from the raw folder in the server!')
 
         sftp = self._ssh_client.open_sftp()
         sftp.remove(filepath)
