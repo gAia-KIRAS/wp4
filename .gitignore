@@ -5,3 +5,8 @@ io_config.yaml
 *.kml
 *.tif
 *.aux.xml
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg

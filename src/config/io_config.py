@@ -1,5 +1,6 @@
 import os
 import yaml
+from typing import Dict
 
 
 class IOConfig:
@@ -20,7 +21,10 @@ class IOConfig:
         self._base_local_dir = os.path.join(self._root, self._config['paths']['base_local_dir'])
         self._temp_dir = os.path.join(self._base_local_dir, self._config['paths']['temp_dir'])
 
-        self._aoi_path = os.path.join(self._base_local_dir, self._config['files']['aoi'])
+        self._aoi_path = {
+            "shp": os.path.join(self._base_local_dir, self._config['files']['aoi_shp']),
+            "gpkg": os.path.join(self._base_local_dir, self._config['files']['aoi_gpkg'])
+        }
         self._inventory_path = os.path.join(self._base_local_dir, self._config['files']['inventory'])
 
     def load_config(self) -> dict:
@@ -72,7 +76,7 @@ class IOConfig:
         return self._config['metadata']['products']
 
     @property
-    def aoi_path(self) -> str:
+    def aoi_path(self) -> Dict[str, str]:
         return self._aoi_path
 
     @property
