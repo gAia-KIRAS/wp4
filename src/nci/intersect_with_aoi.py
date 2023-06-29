@@ -128,12 +128,11 @@ class IntersectAOI:
         # Get all images of the tile reference
         image_refs, df = self._io.list_sentinel_files(tile_ref)
 
-        print(f'Intersecting {len(image_refs)} images of type {image_type} for {tile_ref} with the AOI.')
+        print(f'Intersecting {len(image_refs)} images of type {image_type} for {tile_ref} with the AOI.\n')
 
         unsuccesful_intersections = []
         for i, image_ref in enumerate(image_refs):
-            if i > 0 and round(i/len(image_refs)*100) % 10 == 0:
-                print(f' -- Intersected {round(i/len(image_refs)*100)}% of the images.')
+            print(f' -- Processing image {i + 1} of {len(image_refs)} ({round((i + 1) * 100 / len(image_refs), 2)}%)')
             # Download the image (if not available locally, handled by IO)
             self._io.download_file(image_ref)
             # Crop and save locally
