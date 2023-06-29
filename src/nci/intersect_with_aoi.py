@@ -137,13 +137,14 @@ class IntersectAOI:
             self._io.download_file(image_ref)
             # Crop and save locally
             crop_image_ref = self.intersect(image_ref)
+            # Delete raw image locally
+            self._io.delete_local_file(image_ref)
             if crop_image_ref is None:
                 unsuccesful_intersections.append(image_ref)
                 continue
             # Upload the cropped image to the server
             self._io.upload_file(crop_image_ref)
-            # Delete both the raw and the cropped image locally
-            self._io.delete_local_file(image_ref)
+            # Delete cropped image locally
             self._io.delete_local_file(crop_image_ref)
 
         print(f' -- Processed 100% of the images.')
