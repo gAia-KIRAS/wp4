@@ -6,7 +6,7 @@ import os
 import warnings
 
 from src.config.io_config import IOConfig
-from src.utils import ImageRef, TileRef
+from src.utils import ImageRef, TileRef, RECORDS_FILE_COLUMNS
 
 
 class IO:
@@ -167,6 +167,26 @@ class IO:
 
         return i_refs, df
 
+    def list_all_raw_files(self) -> pd.DataFrame:
+        """
+        List all raw files on the server.
+
+        Returns:
+            df (pd.DataFrame): dataframe with the whole information of the files in the directory
+        """
+        try:
+            df = pd.read_csv(self._config.all_images_path)
+            return df
+        except FileNotFoundError:
+            df = pd.DataFrame()
+            for tile in self._config.available_tiles:
+                for year in self._config.available_years:
+                    for product in self._config.available_products:
+                        print(f'\nListing files for {year}, {tile}, {product}')
+                        df = pd.concat([df, self.list_sentinel_files(TileRef(year, tile, product))[1]])
+            df.to_csv(self._config.all_images_path, index=False)
+            return df
+
     def build_remote_dir(self, image: ImageRef) -> str:
         """
         Build the remote directory where the image is located. For type = "raw", the remote base directory is
@@ -309,6 +329,40 @@ class IO:
         sftp = self._ssh_client.open_sftp()
         sftp.remove(filepath)
         sftp.close()
+
+    def get_records(self) -> pd.DataFrame:
+        """
+        Get the records .csv file from the local machine. It is a table with the following columns:
+        - 'from': str with the type of the image before the operation
+        - 'to': str with the type of the image after the operation
+        - 'year': int with the year of the image
+        - 'tile': str with the tile of the image
+        - 'product': str with the product of the image
+        - 'timestamp': datetime with the timestamp of the operation
+        - 'filename_from': str with the filename of the image before the operation
+        - 'filename_to': str with the filename of the image after the operation
+        - 'success': str with the status of the operation. Can be 1 (success) or 0 (failure)
+        If it is empty, return an empty DataFrame with the correspondent columns.
+
+        Returns:
+            records: pandas DataFrame with the records
+        """
+        try:
+            records = pd.read_csv(self._config.records_path)
+            return records
+        except FileNotFoundError:
+            return pd.DataFrame(columns=RECORDS_FILE_COLUMNS)
+
+    def save_records(self, records: pd.DataFrame):
+        """
+        Save the records .csv file to the local machine.
+
+        Args:
+            records: pandas DataFrame with the records
+        """
+        assert set(records.columns) == set(RECORDS_FILE_COLUMNS), \
+            f'Columns of records file must be {RECORDS_FILE_COLUMNS}'
+        records.to_csv(self._config.records_path, index=False)
 
     @property
     def config(self):

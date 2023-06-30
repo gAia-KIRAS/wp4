@@ -26,6 +26,8 @@ class IOConfig:
             "gpkg": os.path.join(self._base_local_dir, self._config['files']['aoi_gpkg'])
         }
         self._inventory_path = os.path.join(self._base_local_dir, self._config['files']['inventory'])
+        self._records_path = os.path.join(self._base_local_dir, self._config['files']['records'])
+        self._all_images_path = os.path.join(self._base_local_dir, self._config['files']['all_images'])
 
     def load_config(self) -> dict:
         """
@@ -82,3 +84,11 @@ class IOConfig:
     @property
     def inventory_path(self) -> str:
         return self._inventory_path
+
+    @property
+    def records_path(self) -> str:
+        return self._records_path
+
+    @property
+    def all_images_path(self) -> str:
+        return self._all_images_path

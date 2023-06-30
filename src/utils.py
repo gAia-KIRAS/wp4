@@ -1,4 +1,7 @@
 from dataclasses import dataclass
+from datetime import datetime
+
+RECORDS_FILE_COLUMNS = ['from', 'to', 'tile', 'year', 'product', 'timestamp', 'filename_from', 'filename_to', 'success']
 
 
 @dataclass
@@ -79,8 +82,8 @@ class ImageRef:
         return f'{self.type}/{self.tile_ref.to_subpath()}'
 
     def __str__(self):
-        return f'Filename: {self.filename} | Year: {self.year} | Tile: {self.tile} | ' \
-               f'Product: {self.product} | Type: {self.type}'
+        return f'( Filename: {self.filename} | Year: {self.year} | Tile: {self.tile} | ' \
+               f'Product: {self.product} | Type: {self.type} )'
 
     def extract_date(self):
         """
@@ -100,3 +103,10 @@ class ImageRef:
             raise Exception(f'Could not extract date. '
                             f'Filename: {self.filename}, type: {self.type}, extracted date: {date}')
         return date
+
+
+def timestamp() -> str:
+    """
+    Return a timestamp in the format YYYYMMDD_HHMMSS.
+    """
+    return datetime.now().strftime("%Y%m%d_%H%M%S")
