@@ -118,49 +118,6 @@ class IntersectAOI:
         )
         return clip_image_ref
 
-    def intersect_tile_ref(self, image_type: str, tile_ref: TileRef) -> None:
-        """
-        Intersect all images of a specific TileRef (year + product + tile) with the Area of Interest (AOI).
-        For each image:
-            - Downloads the RAW image from the server if it's not available locally
-            - Crops it and saves it locally (CROP)
-            - Uploads the CROP image to the server
-            - Deletes both the RAW and CROP images locally
-
-        Args:
-            image_type (str): type of the image to intersect. Can be 'raw' or 'crop'
-            tile_ref (TileRef): TileRef object with the tile to intersect. Includes year, product, tile.
-        """
-        self._io.check_inputs_with_metadata(tile_ref)
-
-        # Get all images of the tile reference
-        image_refs, df = self._io.list_sentinel_files(tile_ref)
-
-        print(f'Intersecting {len(image_refs)} images of type {image_type} for {tile_ref} with the AOI.\n')
-
-        unsuccesful_intersections = []
-        for i, image_ref in enumerate(image_refs):
-            print(f' -- Processing image {i + 1} of {len(image_refs)} ({round((i + 1) * 100 / len(image_refs), 2)}%)')
-            # Download the image (if not available locally, handled by IO)
-            self._io.download_file(image_ref)
-            # Crop and save locally
-            crop_image_ref = self.intersect(image_ref)
-            # Delete raw image locally
-            self._io.delete_local_file(image_ref)
-            if crop_image_ref is None:
-                unsuccesful_intersections.append(image_ref)
-                continue
-            # Upload the cropped image to the server
-            self._io.upload_file(crop_image_ref)
-            # Delete cropped image locally
-            self._io.delete_local_file(crop_image_ref)
-
-        print(f' -- Processed 100% of the images.')
-        print(f' -- {len(unsuccesful_intersections)} '
-              f'({round(len(unsuccesful_intersections) * 100 / len(image_refs), 2)}%) '
-              f'images could not be intersected with the AOI.')
-        print(f' -- {len(image_refs) - len(unsuccesful_intersections)} images were intersected with the AOI.')
-
     def run(self):
         """
         Intersect all images of all TileRefs (year + product + tile) with the Area of Interest (AOI).
@@ -231,20 +188,3 @@ class IntersectAOI:
                                self._records['timestamp'].between(start_timestamp, timestamp())])
 
         print(f'Unsuccessful intersections: {unsuccessful}')
-
-
-if __name__ == '__main__':
-    io_config = IOConfig()
-    config = Config()
-
-    io = IO(io_config)
-    # intersect = IntersectAOI(io, config)
-    # image = ImageRef(
-    #     '33_T_UM_2021_10_S2A_33TUM_20211010_0_L2A_NDVI.tif',
-    #     tile="33TUM", product="NDVI_raw", type='raw', year=2021)
-    # intersect.intersect(image)
-
-    iaoi = IntersectAOI(io, config)
-
-    tile_ref = TileRef(2021, '33TUM', 'NDVI_raw')
-    iaoi.intersect_tile_ref('raw', tile_ref)
