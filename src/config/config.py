@@ -14,6 +14,10 @@ class Config:
         self._profiling_active = self._config['profiling']['active']
         self._profiling_browser = self._config['profiling']['browser']
 
+        # Execution:
+        self._execute_module = self._config['execute']['module']
+        self._time_limit = self._config['execute']['time_limit']
+
         # NCI parameters
         self._nci_conf = self._config['nci']
 
@@ -34,3 +38,11 @@ class Config:
     @property
     def nci_conf(self) -> dict:
         return self._nci_conf
+
+    @property
+    def execute(self) -> str:
+        return self._execute_module
+
+    @property
+    def time_limit(self) -> int:
+        return self._time_limit
