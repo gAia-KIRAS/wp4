@@ -1,5 +1,5 @@
 from src.config.io_config import IOConfig
-from src.io_manager import IO
+from src.io.io_manager import IO
 from src.utils import TileRef, ImageRef
 
 import pandas as pd
@@ -9,7 +9,6 @@ def check_dates():
     """
     Check if for a particular year, the dates of the images are the same for all tiles.
     """
-
     io_config = IOConfig()
     io = IO(io_config)
     tiles = io_config.available_tiles
@@ -96,7 +95,7 @@ def test_file_removal_on_server():
 
 
 if __name__ == '__main__':
-    # list_all_files_and_save()
+    list_all_files_and_save()
     # test_file_download()
     # test_file_upload()
     test_file_removal_on_server()

@@ -1,7 +1,7 @@
 import warnings
 
 from src.config.config import Config
-from src.io_manager import IO
+from src.io.io_manager import IO
 from src.utils import ImageRef
 import tensorflow as tf
 import rasterio as rio

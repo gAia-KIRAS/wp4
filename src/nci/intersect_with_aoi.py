@@ -4,7 +4,7 @@ from osgeo import gdal
 
 from src.config.config import Config
 from src.config.io_config import IOConfig
-from src.io_manager import IO
+from src.io.io_manager import IO
 from src.utils import ImageRef, TileRef
 from typing import Union
 
