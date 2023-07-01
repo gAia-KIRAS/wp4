@@ -19,7 +19,7 @@ class Config:
         self._time_limit = self._config['execute']['time_limit']
 
         # NCI parameters
-        self._nci_conf = self._config['nci']
+        self._nci_conf = self._config['modules']
 
     def load_config(self) -> dict:
         with open(self._config_path) as f:

@@ -131,8 +131,9 @@ class IntersectAOI:
         3. Save the records to a CSV file
         """
         all_images_df = self._io.list_all_raw_files()
-        all_images_df = all_images_df.loc[all_images_df['product'] == 'NDVI_raw',
-        ['year', 'tile', 'product', 'filename']]
+        all_images_df = all_images_df.loc[
+            (all_images_df['product'] == 'NDVI_raw') & (all_images_df['year'] == 2020),
+            ['year', 'tile', 'product', 'filename']]
 
         # Get all images that still have to be intersected
         intersected = self._records.loc[
