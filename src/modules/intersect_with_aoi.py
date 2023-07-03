@@ -120,7 +120,7 @@ class IntersectAOI:
     def run(self):
         """
         Intersect all images of all TileRefs (year + product + tile) with the Area of Interest (AOI).
-        1. Create a list of all the images that still have to be intersected.
+        1. Create a list of all the images that still have to be intersected. List is filtered according to config.
         2. For each image to be intersected (if time_limit is not over):
             - Downloads the RAW image from the server if it's not available locally
             - Crops it and saves it locally (CROP step). If not possible (corrupted SRS), mark it as unsuccessful
@@ -130,10 +130,13 @@ class IntersectAOI:
             - Add image to the records
         3. Save the records to a CSV file
         """
-        all_images_df = self._io.list_all_raw_files()
-        all_images_df = all_images_df.loc[
-            (all_images_df['product'] == 'NDVI_raw') & (all_images_df['year'] == 2020),
-            ['year', 'tile', 'product', 'filename']]
+        all_images_df = self._io.list_all_raw_files()[['year', 'tile', 'product', 'filename']]
+        if self._config.filters['product']:
+            all_images_df = all_images_df.loc[all_images_df['product'].isin(self._config.filters['product'])]
+        if self._config.filters['year']:
+            all_images_df = all_images_df.loc[all_images_df['year'].isin(self._config.filters['year'])]
+        if self._config.filters['tile']:
+            all_images_df = all_images_df.loc[all_images_df['tile'].isin(self._config.filters['tile'])]
 
         # Get all images that still have to be intersected
         intersected = self._records.loc[
@@ -142,11 +145,12 @@ class IntersectAOI:
         ].rename(columns={'filename_from': 'filename'})
         all_images_df = all_images_df.merge(intersected, how='left', indicator=True,
                                             on=['year', 'tile', 'product', 'filename'])
-        all_images_df = all_images_df.loc[all_images_df['_merge'] == 'left_only',
+        to_intersect = all_images_df.loc[all_images_df['_merge'] == 'left_only',
         ['year', 'tile', 'product', 'filename']].sort_values(by=['year', 'tile', 'product', 'filename'])
         image_refs = [ImageRef(row.filename, row.year, row.tile, row.product, type='raw')
-                      for row in all_images_df.itertuples()]
+                      for row in to_intersect.itertuples()]
 
+        print(f'Filters: {self._config.filters}')
         print(f'Intersecting {len(image_refs)} images with the AOI.\n')
         print(f'Time limit: {self._time_limit} minutes.')
         print(f'{len(all_images_df) - len(image_refs)} images have already been intersected.\n')

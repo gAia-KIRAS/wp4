@@ -17,9 +17,10 @@ class Config:
         # Execution:
         self._execute_module = self._config['execute']['module']
         self._time_limit = self._config['execute']['time_limit']
+        self._filters = self._config['execute']['filters']
 
         # NCI parameters
-        self._nci_conf = self._config['modules']
+        self._nci_conf = self._config['nci']
 
     def load_config(self) -> dict:
         with open(self._config_path) as f:
@@ -46,3 +47,7 @@ class Config:
     @property
     def time_limit(self) -> int:
         return self._time_limit
+
+    @property
+    def filters(self) -> dict:
+        return self._filters
