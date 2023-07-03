@@ -22,6 +22,7 @@ if __name__ == "__main__":
     }.get(config.execute, KeyError(f'{config.execute} is not a valid module.'))
 
     module.run()
+    io_manager.close_connection()
 
     if config.profiling_active:
         profiler.stop()

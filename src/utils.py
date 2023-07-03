@@ -29,7 +29,7 @@ class ImageRef:
         year: year of the data
         tile: Sentinel tile
         product: product type. Can be ['NDVI_raw', 'B02', 'B03', 'B04', 'B08', 'B11', 'SCL']
-        type: (optional) type of the image. Can be ['raw', 'crop']
+        type: (optional) type of the image. Can be ['raw', 'crop']. Also 'testing' for testing purposes.
         tile_ref: (optional) TileRef object with the reference to the tile.
         If not set, year, tile and product must be set.
     """
