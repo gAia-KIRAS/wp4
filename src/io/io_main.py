@@ -3,6 +3,8 @@ from src.io.io_manager import IO
 from src.utils import TileRef, ImageRef
 
 import pandas as pd
+import pytest
+import shutil
 
 
 def check_dates():
@@ -55,6 +57,13 @@ def test_file_download():
     refs, df = io.list_sentinel_files(tile_ref)
     image = refs[0]
     io.download_file(image)
+    filepath = f'{io.config.base_local_dir}/{image.rel_filepath()}'
+    try:
+        io.check_existence_on_local(filepath)
+        io.delete_local_file(image)
+    except FileNotFoundError:
+        pytest.fail(f'File could not be found on local machine')
+
     io.close_connection()
 
 
@@ -68,7 +77,9 @@ def test_extract_date():
     refs, df = io.list_sentinel_files(tile_ref)
     image = refs[0]
     print(image.filename)
+    date = image.extract_date()
     print(image.extract_date())
+    assert len(date) == 8 and date.isdigit() and date == '20210103'
     io.close_connection()
 
 
@@ -78,27 +89,69 @@ def test_file_upload():
     """
     io_config = IOConfig()
     io = IO(io_config)
-    image = ImageRef('crop_NDVI_raw_2021_33TUN_20211017.tif', year=2021, tile='33TUN', product='NDVI_raw', type='crop')
+    image = ImageRef('test_image.tif', year=2018, tile='33TUM', product='NDVI_raw', type='testing')
     io.upload_file(image)
+
+    # Check if the file is there
+    filepath = f'{io.config.base_server_dir}/wp4/{image.rel_filepath()}'
+    try:
+        io.check_existence_on_server(filepath)
+        io.delete_remote_file(image)
+    except FileNotFoundError:
+        pytest.fail(f'File could not be found on server')
+
     io.close_connection()
 
 
 def test_file_removal_on_server():
     """
-    Test the removal of a single file.
+    Test the removal of a single file on the server
     """
     io_config = IOConfig()
     io = IO(io_config)
-    image = ImageRef('crop_NDVI_raw_2021_33TUN_20211017.tif', year=2021, tile='33TUN', product='NDVI_raw', type='crop')
+
+    image = ImageRef('test_image.tif', year=2018, tile='33TUM', product='NDVI_raw', type='testing')
+    io.upload_file(image)
+    filepath = f'{io.config.base_server_dir}/wp4/{image.rel_filepath()}'
+    io.check_existence_on_server(filepath)
+
     io.delete_remote_file(image)
+
+    # Check if the file is there
+    with pytest.raises(FileNotFoundError):
+        io.check_existence_on_server(filepath)
+
+    io.close_connection()
+
+
+def test_file_removal_on_local():
+    """
+    Test the removal of a single file on the local machine
+    """
+    io_config = IOConfig()
+    io = IO(io_config)
+
+    image = ImageRef('test_image.tif', year=2018, tile='33TUM', product='NDVI_raw', type='testing')
+    filepath = f'{io.config.base_local_dir}/{image.rel_filepath()}'
+    image_2 = ImageRef('test_image_2.tif', year=2018, tile='33TUM', product='NDVI_raw', type='testing')
+    filepath_2 = f'{io.config.base_local_dir}/{image_2.rel_filepath()}'
+
+    # Copy the file into the same directory with test_image_to_delete.tif
+    shutil.copyfile(filepath, filepath_2)
+
+    io.delete_local_file(image_2)
+    with pytest.raises(FileNotFoundError):
+        io.check_existence_on_local(filepath_2)
+
     io.close_connection()
 
 
 if __name__ == '__main__':
     list_all_files_and_save()
+    check_dates()
+
     # test_file_download()
     # test_file_upload()
-    test_file_removal_on_server()
-    # check_dates()
-
+    # test_file_removal_on_server()
+    # test_file_removal_on_local()
     # test_extract_date()
