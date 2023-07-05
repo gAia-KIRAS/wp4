@@ -1,6 +1,6 @@
 from src.config.io_config import IOConfig
 from src.io.io_manager import IO
-from src.utils import TileRef, ImageRef
+from src.utils import TileRef, ImageRef, RECORDS_FILE_COLUMNS
 
 import pandas as pd
 import pytest
@@ -67,7 +67,7 @@ def test_file_download():
     io.close_connection()
 
 
-def test_extract_date():
+def test_extract_date_valid():
     """
     Test the extraction of the date from the filename.
     """
@@ -83,20 +83,42 @@ def test_extract_date():
     io.close_connection()
 
 
+def test_extract_date_invalid():
+    """
+    Test the extraction of the date from the filename.
+    Date is invalid so it should raise an exception.
+    """
+    io_config = IOConfig()
+    io = IO(io_config)
+    tile_ref = TileRef(2021, '33TUN', 'NDVI_raw')
+    refs, df = io.list_sentinel_files(tile_ref)
+    image = refs[0]
+    image.filename = '_'.join(image.filename)
+    with pytest.raises(Exception):
+        _ = image.extract_date()
+    io.close_connection()
+
+
 def test_file_upload():
     """
     Test the upload of a single file.
     """
     io_config = IOConfig()
     io = IO(io_config)
+
     image = ImageRef('test_image.tif', year=2018, tile='33TUM', product='NDVI_raw', type='testing')
-    io.upload_file(image)
+    filepath = f'{io.config.base_local_dir}/{image.rel_filepath()}'
+    image_2 = ImageRef('test_image_2.tif', year=2018, tile='33TUM', product='NDVI_raw', type='testing')
+    filepath_2 = f'{io.config.base_local_dir}/{image_2.rel_filepath()}'
+
+    shutil.copyfile(filepath, filepath_2)
+    io.upload_file(image_2)
 
     # Check if the file is there
-    filepath = f'{io.config.base_server_dir}/wp4/{image.rel_filepath()}'
+    filepath = f'{io.config.base_server_dir}/wp4/{image_2.rel_filepath()}'
     try:
         io.check_existence_on_server(filepath)
-        io.delete_remote_file(image)
+        io.delete_remote_file(image_2)
     except FileNotFoundError:
         pytest.fail(f'File could not be found on server')
 
@@ -111,15 +133,21 @@ def test_file_removal_on_server():
     io = IO(io_config)
 
     image = ImageRef('test_image.tif', year=2018, tile='33TUM', product='NDVI_raw', type='testing')
+    image_2 = ImageRef('test_image_2.tif', year=2018, tile='33TUM', product='NDVI_raw', type='testing')
     io.upload_file(image)
     filepath = f'{io.config.base_server_dir}/wp4/{image.rel_filepath()}'
-    io.check_existence_on_server(filepath)
+    filepath_2 = f'{io.config.base_server_dir}/wp4/{image.rel_filepath()}'
 
-    io.delete_remote_file(image)
+    # Copy image
+    filepath_2 = filepath_2.replace('test_image.tif', 'test_image_2.tif')
+    io.run_command(f"cp {filepath} {filepath_2}")
+
+    io.check_existence_on_server(filepath_2)
+    io.delete_remote_file(image_2)
 
     # Check if the file is there
     with pytest.raises(FileNotFoundError):
-        io.check_existence_on_server(filepath)
+        io.check_existence_on_server(filepath_2)
 
     io.close_connection()
 
@@ -146,12 +174,77 @@ def test_file_removal_on_local():
     io.close_connection()
 
 
+def test_load_of_records():
+    """
+    Test the loading of the log records file.
+    """
+    io_config = IOConfig()
+    io = IO(io_config)
+    records = io.get_records()
+    assert len(records) > 0 and isinstance(records, pd.DataFrame) and set(records.columns) == set(RECORDS_FILE_COLUMNS)
+    io.close_connection()
+
+
+def test_existence_on_local_does_not_exist():
+    """
+    Test the check for existence of a file on the local machine.
+    The file does not exist so FileNotFoundError is expected.
+    """
+    io_config = IOConfig()
+    io = IO(io_config)
+    image = ImageRef('test_image_inexistend.tif', year=2018, tile='33TUM', product='NDVI_raw', type='testing')
+    filepath = f'{io.config.base_local_dir}/{image.rel_filepath()}'
+    with pytest.raises(FileNotFoundError):
+        io.check_existence_on_local(filepath)
+    io.close_connection()
+
+
+def test_existence_on_local_does_exist():
+    """
+    Test the check for existence of a file on the local machine.
+    The file does exist so no error is expected.
+    """
+    io_config = IOConfig()
+    io = IO(io_config)
+    image = ImageRef('test_image.tif', year=2018, tile='33TUM', product='NDVI_raw', type='testing')
+    filepath = f'{io.config.base_local_dir}/{image.rel_filepath()}'
+    try:
+        io.check_existence_on_local(filepath)
+    except FileNotFoundError:
+        pytest.fail(f'File could not be found on local machine')
+    io.close_connection()
+
+
+def test_existence_on_server_does_exist():
+    """
+    Test the check for existence of a file on the server.
+    The file does exist so no error is expected.
+    """
+    io_config = IOConfig()
+    io = IO(io_config)
+    image = ImageRef('test_image.tif', year=2018, tile='33TUM', product='NDVI_raw', type='testing')
+    filepath = f'{io.config.base_server_dir}/wp4/{image.rel_filepath()}'
+    try:
+        io.check_existence_on_server(filepath)
+    except FileNotFoundError:
+        pytest.fail(f'File could not be found on server')
+    io.close_connection()
+
+
+def test_existence_on_server_does_not_exist():
+    """
+    Test the check for existence of a file on the server.
+    The file does not exist so FileNotFoundError is expected.
+    """
+    io_config = IOConfig()
+    io = IO(io_config)
+    image = ImageRef('test_image_does_not_exist.tif', year=2018, tile='33TUM', product='NDVI_raw', type='testing')
+    filepath = f'{io.config.base_server_dir}/wp4/{image.rel_filepath()}'
+    with pytest.raises(FileNotFoundError):
+        io.check_existence_on_server(filepath)
+    io.close_connection()
+
+
 if __name__ == '__main__':
     list_all_files_and_save()
     check_dates()
-
-    # test_file_download()
-    # test_file_upload()
-    # test_file_removal_on_server()
-    # test_file_removal_on_local()
-    # test_extract_date()
