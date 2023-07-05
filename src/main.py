@@ -1,7 +1,7 @@
 from pyinstrument import Profiler
 from src.config.config import Config
 
-# from modules.nci_class import NCI
+from src.modules.nci import NCI
 from src.config.io_config import IOConfig
 from src.io.io_manager import IO
 from src.modules.intersect_with_aoi import IntersectAOI
@@ -18,7 +18,7 @@ if __name__ == "__main__":
 
     module = {
         'crop': IntersectAOI(config=config, io=io_manager),
-        # 'modules': NCI(config=config, io=io_manager)
+        'modules': NCI(config=config, io=io_manager)
     }.get(config.execute, KeyError(f'{config.execute} is not a valid module.'))
 
     module.run()

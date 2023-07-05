@@ -1,9 +1,11 @@
-from typing import List, Tuple
+from typing import List, Tuple, Any
 
+import numpy as np
 import paramiko
 import pandas as pd
 import os
 import warnings
+import pickle
 
 from src.config.io_config import IOConfig
 from src.utils import ImageRef, TileRef, RECORDS_FILE_COLUMNS
@@ -96,12 +98,13 @@ class IO:
 
         return stdout.readlines()
 
-    def list_sentinel_files(self, tile_ref: TileRef) -> Tuple[List[ImageRef], pd.DataFrame]:
+    def list_files_on_server(self, tile_ref: TileRef, image_type='raw') -> Tuple[List[ImageRef], pd.DataFrame]:
         """
         List all Sentinel files (type='raw') for a particular tile reference (tile + product + year).
 
         Args:
             tile_ref (TileRef): TileRef object with the tile to list files from
+            image_type (str): type of the files. Must be in IMAGE_TYPES (src.utils.py)
 
         Returns:
             i_refs (List[ImageRef]): list with ImageRef objects on the given directory
@@ -109,11 +112,7 @@ class IO:
         """
         self.check_inputs_with_metadata(tile_ref)
 
-        image_type = 'wp3/sentinel2_L2A'
-        if tile_ref.product == 'NDVI_raw':
-            dir = f'{self._config.base_server_dir}/{image_type}/{tile_ref.to_subpath()}'
-        else:
-            dir = f'{self._config.base_server_dir}/{image_type}/{tile_ref.year}/{tile_ref.tile}/tmp'
+        dir = self.build_remote_dir_for_tile(tile_ref, image_type=image_type)
 
         # Check if directory exists
         self.check_existence_on_server(dir, dir=True)
@@ -132,30 +131,50 @@ class IO:
         df['tile'] = tile_ref.tile
         df['product'] = tile_ref.product
 
-        df = df.join(df['filename'].str.split('_', expand=True))
+        if image_type == 'raw':
+            df = df.join(df['filename'].str.split('_', expand=True))
 
-        # We denote colname_f if the columns are reconstructed from the filename
-        df['built_tile_f'] = df[0] + df[1] + df[2]
-        df['year_f'] = df[3]
-        df['month_f'] = df[4]
-        df['x_f'] = df[5]
-        df['tile_f'] = df[6]
-        df['date_f'] = pd.to_datetime(df[7], format='%Y%m%d')
-        df['y_f'] = df[8]
-        df['base_product_f'] = df[9]
+            # We denote colname_f if the columns are reconstructed from the filename
+            df['built_tile_f'] = df[0] + df[1] + df[2]
+            df['year_f'] = df[3]
+            df['month_f'] = df[4]
+            df['x_f'] = df[5]
+            df['tile_f'] = df[6]
+            df['date_f'] = pd.to_datetime(df[7], format='%Y%m%d')
+            df['y_f'] = df[8]
+            df['base_product_f'] = df[9]
 
-        product_map = {'NDVI': 'NDVI_raw'}
-        df['product_f'] = df[10].str.split('.', expand=True)[0].map(lambda x: product_map.get(x, x))
-        df['extension_f'] = df[10].str.split('.', expand=True)[1]
+            product_map = {'NDVI': 'NDVI_raw'}
+            df['product_f'] = df[10].str.split('.', expand=True)[0].map(lambda x: product_map.get(x, x))
+            df['extension_f'] = df[10].str.split('.', expand=True)[1]
 
-        df.drop(columns=list(range(11)), inplace=True)
+            df.drop(columns=list(range(11)), inplace=True)
+
+        else:
+            df = df.join(df['filename'].str.split('_', expand=True))
+            # We denote colname_f if the columns are reconstructed from the filename
+            df['built_tile_f'] = df[4]
+            df['year_f'] = df[3]
+            df['x_f'] = df[5]
+            df['tile_f'] = df[4]
+            df['date_f'] = df[5].str.split('.', expand=True)[0]
+            df['date_f'] = pd.to_datetime(df['date_f'], format='%Y%m%d')
+            df['extension_f'] = df[5].str.split('.', expand=True)[1]
+            df['month_f'] = df['date_f'].dt.month
+            df['y_f'] = np.NAN
+            df['base_product_f'] = np.NAN
+
+            product_map = {'NDVI': 'NDVI_raw'}
+            df['product_f'] = df[1].map(lambda x: product_map.get(x, x))
+
+            df.drop(columns=list(range(6)), inplace=True)
 
         # Filter by product
         df = df[df['product_f'] == tile_ref.product]
 
         # Print summary
         print(f'Found {len(df)} files for: \n - year = {tile_ref.year}\n - tile = {tile_ref.tile}\n '
-              f'- product = {tile_ref.product}.')
+              f'- product = {tile_ref.product}\n - type = {image_type}')
         print(f'Total size: {df["size"].sum()} Mb.')
         print(f'Date range: {df["date_f"].min()} - {df["date_f"].max()}')
 
@@ -163,7 +182,7 @@ class IO:
         df.sort_values(by='date_f', inplace=True)
 
         # Create list of ImageRef objects
-        i_refs = [ImageRef(f, tile_ref=tile_ref, type='raw') for f in df.filename.values.tolist()]
+        i_refs = [ImageRef(f, tile_ref=tile_ref, type=image_type) for f in df.filename.values.tolist()]
 
         return i_refs, df
 
@@ -183,28 +202,40 @@ class IO:
                 for year in self._config.available_years:
                     for product in self._config.available_products:
                         print(f'\nListing files for {year}, {tile}, {product}')
-                        df = pd.concat([df, self.list_sentinel_files(TileRef(year, tile, product))[1]])
+                        df = pd.concat([df, self.list_files_on_server(TileRef(year, tile, product))[1]])
             df.to_csv(self._config.all_images_path, index=False)
             return df
 
-    def build_remote_dir(self, image: ImageRef) -> str:
+    def build_remote_dir_for_image(self, image: ImageRef) -> str:
         """
         Build the remote directory where the image is located. For type = "raw", the remote base directory is
         wp3/sentinel2_L2A. For any other type, the remote base directory is wp4/{type}.
 
         Args:
-            image: reference to the image to download
+            image: reference to the image to download. Must have type attribute.
         """
         if image.type is None:
             raise Exception('Cannot build remote directory. Image type must be specified.')
-        rel_dir = ("wp3/sentinel2_L2A" if image.type == 'raw' else f"wp4/{image.type}") + f"/{image.year}/{image.tile}"
 
-        if image.product == 'NDVI_raw' or image.type != 'raw':
-            rel_dir += f'/{image.product}'
+        return self.build_remote_dir_for_tile(image.tile_ref, image.type)
+
+    def build_remote_dir_for_tile(self, tile_ref: TileRef, image_type: str):
+        """
+        Build the remote directory where the correspondant images are located.
+        For type = "raw", the remote base directory is wp3/sentinel2_L2A.
+        For any other type, the remote base directory is wp4/{type}.
+
+        Args:
+            tile_ref: reference to the image to download
+            image_type: string in IMAGE_TYPES
+        """
+        rel_dir = ("wp3/sentinel2_L2A" if image_type == 'raw' else f"wp4/{image_type}") + \
+                  f"/{tile_ref.year}/{tile_ref.tile}"
+        if tile_ref.product == 'NDVI_raw' or image_type != 'raw':
+            rel_dir += f'/{tile_ref.product}'
         else:
             # Only raw non-NDVI files are stored in a tmp folder
             rel_dir += f"/tmp"
-
         return f"{self._config.base_server_dir}/{rel_dir}"
 
     def download_file(self, image: ImageRef):
@@ -217,7 +248,7 @@ class IO:
         print(f'Downloading image {image} from server')
         self.check_inputs_with_metadata(image.tile_ref)
 
-        dir = self.build_remote_dir(image)
+        dir = self.build_remote_dir_for_image(image)
         filepath = f'{dir}/{image.filename}'
         self.check_existence_on_server(dir, dir=True)
         self.check_existence_on_server(filepath, dir=False)
@@ -273,7 +304,7 @@ class IO:
         print(f'Uploading image {image} to server.')
         self.check_inputs_with_metadata(image.tile_ref)
 
-        dir = self.build_remote_dir(image)
+        dir = self.build_remote_dir_for_image(image)
         filepath = f'{dir}/{image.filename}'
         self.check_existence_on_server(dir, dir=True)
 
@@ -317,7 +348,7 @@ class IO:
         print(f'Deleting image {image} from server.')
         self.check_inputs_with_metadata(image.tile_ref)
 
-        dir = self.build_remote_dir(image)
+        dir = self.build_remote_dir_for_image(image)
         filepath = f'{dir}/{image.filename}'
         self.check_existence_on_server(dir, dir=True)
         self.check_existence_on_server(filepath, dir=False)
@@ -363,6 +394,32 @@ class IO:
         assert set(records.columns) == set(RECORDS_FILE_COLUMNS), \
             f'Columns of records file must be {RECORDS_FILE_COLUMNS}'
         records.to_csv(self._config.records_path, index=False)
+
+    @staticmethod
+    def save_pickle(object: Any, filepath: str):
+        """
+        Save an object to a pickle file.
+
+        Args:
+            object: object to save
+            filepath: path to the pickle file
+        """
+        with open(filepath, 'wb') as f:
+            pickle.dump(object, f)
+
+    @staticmethod
+    def load_pickle(filepath: str) -> Any:
+        """
+        Load an object from a pickle file.
+
+        Args:
+            filepath: path to the pickle file
+
+        Returns:
+            object: object loaded from the pickle file
+        """
+        with open(filepath, 'rb') as f:
+            return pickle.load(f)
 
     @property
     def config(self):

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 RECORDS_FILE_COLUMNS = ['from', 'to', 'tile', 'year', 'product', 'timestamp', 'filename_from', 'filename_to', 'success']
+IMAGE_TYPES = ['raw', 'crop', 'nci','testing']
 
 
 @dataclass
@@ -52,7 +53,7 @@ class ImageRef:
             if not self.year or not self.tile or not self.product:
                 raise Exception('year, tile and product must be set if TileRef is not set.')
             self.tile_ref = TileRef(self.year, self.tile, self.product)
-        if self.type and self.type not in ['raw', 'crop', 'testing']:
+        if self.type and self.type not in IMAGE_TYPES:
             raise Exception(f'Image type {self.type} not supported.')
 
     def rel_filepath(self) -> str:
@@ -96,7 +97,7 @@ class ImageRef:
         if self.type == 'raw':
             date = self.filename.split('_')[7]
         elif self.type == 'crop':
-            date = self.filename.split('_')[-1]
+            date = self.filename.split('_')[-1].split('.')[0]
         else:
             raise Exception("Type of image not in ['raw', 'crop']. Date cannot be extracted.")
 

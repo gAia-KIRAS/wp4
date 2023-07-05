@@ -15,7 +15,7 @@ def test_file_download():
     io_config = IOConfig()
     io = IO(io_config)
     tile_ref = TileRef(2021, '33TUN', 'NDVI_raw')
-    refs, df = io.list_sentinel_files(tile_ref)
+    refs, df = io.list_files_on_server(tile_ref)
     image = refs[0]
     io.download_file(image)
     filepath = f'{io.config.base_local_dir}/{image.rel_filepath()}'
@@ -35,7 +35,7 @@ def test_extract_date_valid():
     io_config = IOConfig()
     io = IO(io_config)
     tile_ref = TileRef(2021, '33TUN', 'NDVI_raw')
-    refs, df = io.list_sentinel_files(tile_ref)
+    refs, df = io.list_files_on_server(tile_ref)
     image = refs[0]
     print(image.filename)
     date = image.extract_date()
@@ -52,7 +52,7 @@ def test_extract_date_invalid():
     io_config = IOConfig()
     io = IO(io_config)
     tile_ref = TileRef(2021, '33TUN', 'NDVI_raw')
-    refs, df = io.list_sentinel_files(tile_ref)
+    refs, df = io.list_files_on_server(tile_ref)
     image = refs[0]
     image.filename = '_'.join(image.filename)
     with pytest.raises(Exception):

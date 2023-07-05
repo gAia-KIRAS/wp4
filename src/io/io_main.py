@@ -17,7 +17,7 @@ def check_dates():
     for year in years:
         for tile in tiles:
             tile_ref = TileRef(year, tile, 'NDVI_raw')
-            refs, df = io.list_sentinel_files(tile_ref)
+            refs, df = io.list_files_on_server(tile_ref)
             dates[(year, tile)] = set(df.date_f.dt.strftime('%Y-%m-%d'))
 
     for year in years:
@@ -40,11 +40,18 @@ def list_all_files_and_save():
         for year in io_config.available_years:
             for product in io_config.available_products:
                 print(f'\nListing files for {year}, {tile}, {product}')
-                df = pd.concat([df, io.list_sentinel_files(TileRef(year, tile, product))[1]])
+                df = pd.concat([df, io.list_files_on_server(TileRef(year, tile, product))[1]])
     df.to_csv('sentinel_files.csv', index=False)
     io.close_connection()
 
 
 if __name__ == '__main__':
-    list_all_files_and_save()
-    check_dates()
+    # list_all_files_and_save()
+    # check_dates()
+    io_config = IOConfig()
+    io = IO(io_config)
+
+    tile_ref = TileRef(2020, '33TUM', 'NDVI_raw')
+
+    io.list_files_on_server(tile_ref, image_type='raw')
+    io.list_files_on_server(tile_ref, image_type='crop')

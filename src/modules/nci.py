@@ -1,10 +1,12 @@
 import warnings
+import gdal
+import numpy as np
+import tensorflow as tf
 
 from src.config.config import Config
+from src.config.io_config import IOConfig
 from src.io.io_manager import IO
-from src.utils import ImageRef
-import tensorflow as tf
-import rasterio as rio
+from src.utils import ImageRef, TileRef
 
 
 class NCI:
@@ -16,6 +18,7 @@ class NCI:
         _io (IO): IO object with the input/output parameters
         _n_size (int): size of the neighborhood
     """
+
     def __init__(self, config: Config, io: IO):
         self._config = config
         self._io = io
@@ -64,93 +67,106 @@ class NCI:
 
         return filepath_1, filepath_2
 
-    def save_nci(self, nci: tf.Tensor, image: ImageRef):
+    def save_nci(self, nci: tf.Tensor, image: ImageRef) -> ImageRef:
         """
-        Saves the NCI to the server. The NCI is saved according to the following rules:
-        - saved using tf.saved_model.save
-        - will be loaded using tf.saved_model.load
-        - for image_1 -> image_2 will be saved in the directory of image_1
-        - will have name: '{nci}_{image_1.year}_{image_1.tile}_{image_1.date}'
-        - will be placed in directory '{base_server_dir}/{nci}/{image_1.year}/{image_1.tile}/{image_1.date}'
+        Saves the NCI locally. The NCI is saved according to the following rules:
+        - saved as a .pkl file that serializes the tf.Tensor.numpy() np.ndarray. Therefore, when loaded, it is
+        a np.ndarray with shape (3, image.height, image.width)
+        - NCI for (image_1 -> image_2) will be saved in the directory of image_1
+        - will have name: - 'nci_{image_1.product}_{image_1.year}_{image_1.tile}_{image_1.date}.tif'
 
         Args:
-            nci: tf.Tensor with the NCI to save
+            nci: tf.Tensor with the NCI to save. Shape: (image.height, image.width, 3)
             image: ImageRef object for the first image in the pair
+
+        Returns:
+            image: ImageRef object with the new saved image
         """
         # Check if the directory exists. If not, the IO method already creates it
-        dir = f'{self._io.config.base_server_dir}/{image.tile_ref.to_subpath()}'
-        self._io.check_existence_on_server(dir, dir=True)
+        dir = f'{self._io.config.base_local_dir}/nci/{image.tile_ref.to_subpath()}'
+        self._io.check_existence_on_local(dir, dir=True)
 
-        # Save the NCI to the local machine first
-        new_image = ImageRef(f'nci_{image.year}_{image.tile}_{image.product}',
-                             year=image.year, tile=image.tile, product='nci')
-        local_dir = f'{self._io.config.base_local_dir}/{new_image.rel_dir()}'
-        self._io.check_existence_on_local(local_dir, dir=True)
-        filepath = f'{local_dir}/{new_image.filename}'
+        filename = f'nci_{image.product}_{image.year}_{image.tile}_{image.extract_date()}.pkl'
+        filepath = f'{dir}/{filename}'
+
+        # Check if image already exists. If so, overwrite it
         try:
             self._io.check_existence_on_local(filepath, dir=False)
-            warnings.warn(f'\nNCI {new_image.filename} already exists. Overwriting it.')
+            warnings.warn(f'\nNCI {filename} already exists. Overwriting it.')
         except FileNotFoundError:
             pass
-        tf.saved_model.save(nci, filepath)
 
-        # Upload the NCI to the server
-        self._io.upload_file(new_image)
+        self._io.save_pickle(nci.numpy(), filepath)
+        return ImageRef(filename, tile_ref=image.tile_ref, type='nci')
 
-        # Delete the NCI from the local machine
-        self._io.delete_local_file(new_image)
-
-    def compute_nci(self, image_1: ImageRef, image_2: ImageRef) -> (tf.Tensor, tf.Tensor, tf.Tensor):
+    def compute_and_save_nci(self, image_1: ImageRef, image_2: ImageRef) -> ImageRef:
         """
-        Computes the NCI between two images. Definiton of the NCI:
-        - https://linkinghub.elsevier.com/retrieve/pii/S0034425705002919
-        We delete the intermediate tf.Tensors to free up memory as soon as they are not needed anymore.
+        Computes and saves the NCI between two images. See more details about the computation in compute_nci method.
 
         Args:
             image_1: ImageRef object with the first image
             image_2: ImageRef object with the second image
 
         Returns:
-            nci: tf.Tensor with the final NCI. Contains three channels:
-                - 1st channel: correlation r
-                - 2nd channel: slope a
-                - 3rd channel: intercept b
+            image_ref: ImageRef object referencing the new saved NCI image
         """
         filepath_1, filepath_2 = self.build_and_check_paths(image_1, image_2)
 
         # Both are locally available, we can compute the NCI
-        with rio.open(filepath_1) as reader:
-            r_1 = tf.convert_to_tensor(reader.read(1), dtype=tf.float32, name='r_1')
-        with rio.open(filepath_2) as reader:
-            r_2 = tf.convert_to_tensor(reader.read(1), dtype=tf.float32, name='r_2')
+        r_1 = gdal.Open(filepath_1).ReadAsArray()
+        r_2 = gdal.Open(filepath_2).ReadAsArray()
 
-        # Compute image of means according to filter size
+        nci_result = self.compute_nci(r_1, r_2)
+        new_image = self.save_nci(nci_result, image_1)
+
+        return new_image
+
+    def compute_nci(self, r_1: np.ndarray, r_2: np.ndarray) -> tf.Tensor:
+        """
+        Computes the NCI between two images. Definiton of the NCI:
+        - https://linkinghub.elsevier.com/retrieve/pii/S0034425705002919
+        We delete the intermediate tf.Tensors to free up memory as soon as they are not needed anymore.
+
+        Args:
+            r_1: np.ndarray with the first image
+            r_2: np.ndarray with the second image
+
+        Returns:
+            nci: tf.Tensor with the NCI between the two images. Shape: (3, image.height, image.width)
+                 The three bands correspond to the correlation r, the intercept a, and the slope b.
+        """
+        r_1 = tf.convert_to_tensor(r_1, dtype=tf.float32, name='r_1')
+        r_2 = tf.convert_to_tensor(r_2, dtype=tf.float32, name='r_2')
+
+        # Compute image of means according to filter size, and center the image (substract mean)
         mean_1 = self.apply_convolutions(r_1, self._n_size, filter_values=1 / (self._n_size ** 2))
         mean_2 = self.apply_convolutions(r_2, self._n_size, filter_values=1 / (self._n_size ** 2))
-
         centered_1 = tf.subtract(r_1, mean_1)
         del r_1
         centered_2 = tf.subtract(r_2, mean_2)
         del r_2
 
-        cov = self.apply_convolutions(tf.multiply(centered_1, centered_2), self._n_size, filter_values=1 / (self._n_size ** 2 - 1))
+        # Compute covariance and standard deviations
+        cov = self.apply_convolutions(tf.multiply(centered_1, centered_2), self._n_size,
+                                      filter_values=1 / (self._n_size ** 2 - 1))
+        std_1 = tf.sqrt(
+            self.apply_convolutions(tf.square(centered_1), self._n_size, filter_values=1 / (self._n_size ** 2 - 1)))
+        std_2 = tf.sqrt(
+            self.apply_convolutions(tf.square(centered_2), self._n_size, filter_values=1 / (self._n_size ** 2 - 1)))
 
-        std_1 = tf.sqrt(self.apply_convolutions(tf.square(centered_1), self._n_size, filter_values=1 / (self._n_size ** 2 - 1)))
-        std_2 = tf.sqrt(self.apply_convolutions(tf.square(centered_2), self._n_size, filter_values=1 / (self._n_size ** 2 - 1)))
-
+        # Compute NCI
         r = tf.divide(cov, tf.multiply(std_1, std_2))
         del std_2
-
         a = tf.divide(cov, tf.square(std_1))
         del cov, std_1
         b = tf.subtract(mean_2, tf.multiply(a, mean_1))
         del mean_1, mean_2
 
-        # Put the three images in one tensor
-        nci = tf.stack([r, a, b], axis=2)
+        # Stack the three images in one tensor
+        nci_result = tf.stack([r, a, b], axis=0)
         del r, a, b
 
-        return nci
+        return nci_result
 
     @staticmethod
     def apply_convolutions(raster, filter_size, filter_values=None):
@@ -178,3 +194,22 @@ class NCI:
             padding='SAME'
         )
         return tf.squeeze(output)
+
+
+if __name__ == '__main__':
+    config = Config()
+    io_config = IOConfig()
+    io = IO(io_config)
+    nci = NCI(config, io)
+
+    tile_ref = TileRef(2020, '33TUM', 'NDVI_raw')
+    image_refs, _ = io.list_files_on_server(tile_ref, image_type='crop')
+    image_1 = image_refs[0]
+    image_1.type = 'crop'
+    image_2 = image_refs[1]
+    image_2.type = 'crop'
+
+    io.download_file(image_1)
+    io.download_file(image_2)
+
+    result = nci.compute_and_save_nci(image_1, image_2)

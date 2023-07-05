@@ -65,7 +65,7 @@ class IntersectAOI:
         """
         Intersects a local .tif file referenced by image (ImageRef) with the Area of Interest AOI.
         Saves the result locally in a new .tif file with the following name:
-        - 'crop_{image.product}_{image.year}_{imgae.tile}_{image.date}.tif'
+        - 'crop_{image.product}_{image.year}_{image.tile}_{image.date}.tif'
 
         Args:
             image: ImageRef object with the image to intersect. Needs to have the attribute type set.
@@ -109,7 +109,7 @@ class IntersectAOI:
             format='GTiff',
             cutlineDSName=self._io.config.aoi_path['shp'],
             cropToCutline=True,
-            dstNodata=0,
+            dstNodata=pd.NA,
             multithread=True,
             warpOptions=['NUM_THREADS=ALL_CPUS'],
             creationOptions=['COMPRESS=LZW'],
