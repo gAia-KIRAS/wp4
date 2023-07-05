@@ -159,7 +159,7 @@ class IntersectAOI:
         i = 0
         while i < len(image_refs) and time.time() - start_time < self._time_limit * 60:
             print(f' -- Processing image {i + 1} of {len(image_refs)} '
-                  f'({round((i + 1) * 100 / len(image_refs), 2)}%). Time elapsed: {round(time.time() - start_time, 2) / 60}')
+                  f'({round((i + 1) * 100 / len(image_refs), 2)}%). Time elapsed: {round((time.time() - start_time) / 60, 2)} minutes. --')
             image_ref = image_refs[i]
 
             # Download the image (if not available locally, handled by IO)
