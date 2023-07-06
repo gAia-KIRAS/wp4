@@ -130,22 +130,15 @@ class IntersectAOI:
             - Add image to the records
         3. Save the records to a CSV file
         """
-        all_images_df = self._io.list_all_raw_files()[['year', 'tile', 'product', 'filename']]
-        if self._config.filters['product']:
-            all_images_df = all_images_df.loc[all_images_df['product'].isin(self._config.filters['product'])]
-        if self._config.filters['year']:
-            all_images_df = all_images_df.loc[all_images_df['year'].isin(self._config.filters['year'])]
-        if self._config.filters['tile']:
-            all_images_df = all_images_df.loc[all_images_df['tile'].isin(self._config.filters['tile'])]
+        images_df = self._io.filter_all_images(image_type='raw', filters=self._config.filters)
 
         # Get all images that still have to be intersected
         intersected = self._records.loc[
-            (self._records['from'] == "raw") & (self._records['to'] == "crop"),
-            ['year', 'tile', 'product', 'filename_from']
+            (self._records['from'] == "raw") & (self._records['to'] == "crop") & (self._records['success'] == 1)
+            , ['year', 'tile', 'product', 'filename_from']
         ].rename(columns={'filename_from': 'filename'})
-        all_images_df = all_images_df.merge(intersected, how='left', indicator=True,
-                                            on=['year', 'tile', 'product', 'filename'])
-        to_intersect = all_images_df.loc[all_images_df['_merge'] == 'left_only',
+        images_df = images_df.merge(intersected, how='left', indicator=True, on=['year', 'tile', 'product', 'filename'])
+        to_intersect = images_df.loc[images_df['_merge'] == 'left_only',
         ['year', 'tile', 'product', 'filename']].sort_values(by=['year', 'tile', 'product', 'filename'])
         image_refs = [ImageRef(row.filename, row.year, row.tile, row.product, type='raw')
                       for row in to_intersect.itertuples()]
@@ -153,7 +146,7 @@ class IntersectAOI:
         print(f'Filters: {self._config.filters}')
         print(f'Intersecting {len(image_refs)} images with the AOI.\n')
         print(f'Time limit: {self._time_limit} minutes.')
-        print(f'{len(all_images_df) - len(image_refs)} images have already been intersected.\n')
+        print(f'{len(images_df) - len(image_refs)} images have already been intersected.\n')
 
         start_timestamp, start_time = timestamp(), time.time()
         i = 0
@@ -164,18 +157,23 @@ class IntersectAOI:
 
             # Download the image (if not available locally, handled by IO)
             self._io.download_file(image_ref)
+
             # Crop and save locally
             crop_image_ref = self.intersect(image_ref)
+
             # Delete raw image locally
             self._io.delete_local_file(image_ref)
             if crop_image_ref is None:
                 record = ['raw', 'crop', image_ref.tile, image_ref.year, image_ref.product, timestamp(), image_ref.filename, None, 0]
                 self._records.loc[len(self._records)] = record
                 continue
+
             # Upload the cropped image to the server
             self._io.upload_file(crop_image_ref)
+
             # Delete cropped image locally
             self._io.delete_local_file(crop_image_ref)
+
             # Add image to the records
             record = ['raw', 'crop', image_ref.tile, image_ref.year, image_ref.product, timestamp(),
                       image_ref.filename, crop_image_ref.filename, 1]

@@ -186,7 +186,7 @@ class IO:
 
         return i_refs, df
 
-    def list_all_raw_files(self) -> pd.DataFrame:
+    def list_all_files_of_type(self, image_type) -> pd.DataFrame:
         """
         List all raw files on the server.
 
@@ -194,7 +194,7 @@ class IO:
             df (pd.DataFrame): dataframe with the whole information of the files in the directory
         """
         try:
-            df = pd.read_csv(self._config.all_images_path)
+            df = pd.read_csv(self._config.all_images_path[image_type])
             return df
         except FileNotFoundError:
             df = pd.DataFrame()
@@ -202,8 +202,8 @@ class IO:
                 for year in self._config.available_years:
                     for product in self._config.available_products:
                         print(f'\nListing files for {year}, {tile}, {product}')
-                        df = pd.concat([df, self.list_files_on_server(TileRef(year, tile, product))[1]])
-            df.to_csv(self._config.all_images_path, index=False)
+                        df = pd.concat([df, self.list_files_on_server(TileRef(year, tile, product), image_type)[1]])
+            df.to_csv(self._config.all_images_path[image_type], index=False)
             return df
 
     def build_remote_dir_for_image(self, image: ImageRef) -> str:
@@ -420,6 +420,19 @@ class IO:
         """
         with open(filepath, 'rb') as f:
             return pickle.load(f)
+
+    def filter_all_images(self, image_type: str, filters: dict) -> pd.DataFrame:
+        """
+        Filter all raw
+        """
+        images_df = self.list_all_files_of_type(image_type)[['year', 'tile', 'product', 'filename']]
+        if filters['product']:
+            images_df = images_df.loc[images_df['product'].isin(filters['product'])]
+        if filters['year']:
+            images_df = images_df.loc[images_df['year'].isin(filters['year'])]
+        if filters['tile']:
+            images_df = images_df.loc[images_df['tile'].isin(filters['tile'])]
+        return images_df
 
     @property
     def config(self):

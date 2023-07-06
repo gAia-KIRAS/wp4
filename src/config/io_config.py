@@ -27,7 +27,10 @@ class IOConfig:
         }
         self._inventory_path = os.path.join(self._base_local_dir, self._config['files']['inventory'])
         self._records_path = os.path.join(self._base_local_dir, self._config['files']['records'])
-        self._all_images_path = os.path.join(self._base_local_dir, self._config['files']['all_images'])
+        self._all_images_path = {
+            image_type: os.path.join(self._base_local_dir, image_type_path)
+            for image_type, image_type_path in self._config['files']['all_images'].items()
+        }
 
     def load_config(self) -> dict:
         """
@@ -90,5 +93,5 @@ class IOConfig:
         return self._records_path
 
     @property
-    def all_images_path(self) -> str:
+    def all_images_path(self) -> dict:
         return self._all_images_path

@@ -1,12 +1,14 @@
 import warnings
 import gdal
 import numpy as np
+import pandas as pd
 import tensorflow as tf
+import time
 
 from src.config.config import Config
 from src.config.io_config import IOConfig
 from src.io.io_manager import IO
-from src.utils import ImageRef, TileRef
+from src.utils import ImageRef, TileRef, timestamp, RECORDS_FILE_COLUMNS
 
 
 class NCI:
@@ -20,8 +22,11 @@ class NCI:
     """
 
     def __init__(self, config: Config, io: IO):
-        self._config = config
         self._io = io
+        self._config = config
+
+        self._records = self._io.get_records()
+        self._time_limit = self._config.time_limit
 
         self._n_size = self._config.nci_conf['n_size']
 
@@ -34,11 +39,68 @@ class NCI:
         self._n_size = value
 
     def run(self):
-        print('Running NCI')
-        # Initialize a tensorflow session
+        images_df = self._io.filter_all_images(image_type='crop', filters=self._config.filters)
 
-        # Create a tensorflow constant
-        hello = tf.constant('Hello, TensorFlow!')
+        # Get all images that still have no computed NCI
+        nci_done = self._records.loc[
+            (self._records['from'] == 'crop') & (self._records['to'] == 'nci'),
+            ['year', 'tile', 'product', 'filename']
+        ].rename(columns={'filename_from': 'filename'})
+        images_df = images_df.merge(nci_done, how='left', on=['year', 'tile', 'product', 'filename'], indicator=True)
+        to_compute = images_df.loc[images_df['_merge'] == 'left_only',
+        ['year', 'tile', 'product', 'filename']].sort_values(by=['year', 'tile', 'product', 'filename'])
+        image_refs = [ImageRef(row.filename, row.year, row.tile, row.product, type='raw')
+                      for row in to_compute.itertuples()]
+
+        print(f'Filters: {self._config.filters}')
+        print(f'Intersecting {len(image_refs)} images with the AOI.\n')
+        print(f'Time limit: {self._time_limit} minutes.')
+        print(f'{len(images_df) - len(image_refs)} images have already been intersected.\n')
+
+        start_timestamp, start_time = timestamp(), time.time()
+        i = 0
+        while i < len(image_refs) - 1 and time.time() - start_time < self._time_limit * 60:
+            print(f' -- Processing image {i + 1} of {len(image_refs)} '
+                  f'({round((i + 1) * 100 / len(image_refs), 2)}%). Time elapsed: {round((time.time() - start_time) / 60, 2)} minutes. --')
+            image_1 = image_refs[i]
+            image_2 = image_refs[i + 1]
+
+            # Download images (if not already downloaded)
+            self._io.download_file(image_1)
+            self._io.download_file(image_2)
+
+            # NCI computed locally
+            nci_image = self.compute_and_save_nci(image_1, image_2)
+
+            # Delete first image from local machine. Second image will be used for the next iteration
+            self._io.delete_local_file(image_1)
+
+            # Upload NCI to server
+            self._io.upload_file(nci_image)
+
+            # Delete image from local machine
+            self._io.delete_local_file(nci_image)
+
+            # Update records
+            record = ['crop', 'nci', image_1.tile, image_1.year, image_1.product, timestamp(),
+                      image_1.filename, nci_image.filename, 1]
+            record_df = pd.DataFrame({k: [v] for (k, v) in zip(RECORDS_FILE_COLUMNS, record)})
+            self._records = pd.concat([self._records, record_df], ignore_index=True)
+            self._io.save_records(self._records)
+            i += 1
+
+        # Delete image_2 from local machine
+        if i > 0:
+            self._io.delete_local_file(image_2)
+
+        print(f'\nEnd of process. Time elapsed: {round((time.time() - start_time) / 60, 2)} minutes.')
+        print(f'Processed {i} images during the execution.')
+        unsuccessful = len(self._records.loc[
+                               (self._records['success'] == 0) & (self._records['from'] == 'crop') &
+                               (self._records['to'] == 'nci') &
+                               self._records['timestamp'].between(start_timestamp, timestamp())])
+
+        print(f'Unsuccessful computations: {unsuccessful}')
 
     def build_and_check_paths(self, image_1: ImageRef, image_2: ImageRef) -> (str, str):
         """
