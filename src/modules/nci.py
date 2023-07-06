@@ -67,17 +67,19 @@ class NCI:
 
         return filepath_1, filepath_2
 
-    def save_nci(self, nci: tf.Tensor, image: ImageRef) -> ImageRef:
+    def save_nci(self, nci: tf.Tensor, image: ImageRef, srs: str) -> ImageRef:
         """
         Saves the NCI locally. The NCI is saved according to the following rules:
-        - saved as a .pkl file that serializes the tf.Tensor.numpy() np.ndarray. Therefore, when loaded, it is
-        a np.ndarray with shape (3, image.height, image.width)
+        - saved as a .tif file. Therefore, when loaded, it is an image with 3 channels
+        - the spatial reference system is the same as the one of the image
+        - LZW compression is used
         - NCI for (image_1 -> image_2) will be saved in the directory of image_1
         - will have name: - 'nci_{image_1.product}_{image_1.year}_{image_1.tile}_{image_1.date}.tif'
 
         Args:
             nci: tf.Tensor with the NCI to save. Shape: (image.height, image.width, 3)
             image: ImageRef object for the first image in the pair
+            srs: string with the spatial reference system of the image
 
         Returns:
             image: ImageRef object with the new saved image
@@ -86,7 +88,10 @@ class NCI:
         dir = f'{self._io.config.base_local_dir}/nci/{image.tile_ref.to_subpath()}'
         self._io.check_existence_on_local(dir, dir=True)
 
-        filename = f'nci_{image.product}_{image.year}_{image.tile}_{image.extract_date()}.pkl'
+        filename_aux = f'nci_{image.product}_{image.year}_{image.tile}_{image.extract_date()}_aux.tif'
+        filepath_aux = f'{dir}/{filename_aux}'
+
+        filename = f'nci_{image.product}_{image.year}_{image.tile}_{image.extract_date()}.tif'
         filepath = f'{dir}/{filename}'
 
         # Check if image already exists. If so, overwrite it
@@ -96,7 +101,27 @@ class NCI:
         except FileNotFoundError:
             pass
 
-        self._io.save_pickle(nci.numpy(), filepath)
+        nci_numpy = nci.numpy()
+
+        # Save an auxiliary .tif file
+        driver = gdal.GetDriverByName('GTiff')
+        n_bands, rows, cols = nci.shape
+        dataset = driver.Create(filepath_aux, cols, rows, n_bands, gdal.GDT_Float32)
+        dataset.SetProjection(srs)
+        for i in range(n_bands):
+            band = dataset.GetRasterBand(i + 1)
+            if i == 0:
+                band.SetNoDataValue(np.nan)
+            band.WriteArray(nci_numpy[i])
+        dataset.FlushCache()
+        dataset = None
+
+        # Use gdal translate to compress the image using LZW
+        gdal.Translate(filepath_aux, filepath, options='-co COMPRESS=LZW')
+
+        # Delete the auxiliary file
+        io.delete_local_file(ImageRef(filename_aux, tile_ref=image.tile_ref, type='nci'))
+
         return ImageRef(filename, tile_ref=image.tile_ref, type='nci')
 
     def compute_and_save_nci(self, image_1: ImageRef, image_2: ImageRef) -> ImageRef:
@@ -116,8 +141,11 @@ class NCI:
         r_1 = gdal.Open(filepath_1).ReadAsArray()
         r_2 = gdal.Open(filepath_2).ReadAsArray()
 
+        # Get SRS from image_1
+        srs = gdal.Open(filepath_1).GetProjection()
+
         nci_result = self.compute_nci(r_1, r_2)
-        new_image = self.save_nci(nci_result, image_1)
+        new_image = self.save_nci(nci_result, image_1, srs)
 
         return new_image
 

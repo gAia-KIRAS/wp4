@@ -73,9 +73,9 @@ class ImageRef:
     def rel_dir(self) -> str:
         """
         Same as rel_filepath, but just build the relative directory of the image:
-         {type}/{product}/{year}/{product}. Examples:
-        - raw/NDVI_raw/2019/33TUM
-        - crop/B03/2018/33TUN
+         {type}/{year}/{tile}/{product}. Examples:
+        - raw/2019/33TUM/NDVI_raw
+        - crop/2018/33TUN/B03
 
         Returns:
             string with the relative directory
@@ -96,7 +96,7 @@ class ImageRef:
             raise Exception('Type of image not set. Date cannot be extracted.')
         if self.type == 'raw':
             date = self.filename.split('_')[7]
-        elif self.type == 'crop':
+        elif self.type in ['crop', 'nci']:
             date = self.filename.split('_')[-1].split('.')[0]
         else:
             raise Exception("Type of image not in ['raw', 'crop']. Date cannot be extracted.")
