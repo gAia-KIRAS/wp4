@@ -204,3 +204,62 @@ def test_existence_on_server_does_not_exist():
     with pytest.raises(FileNotFoundError):
         io.check_existence_on_server(filepath)
     io.close_connection()
+
+
+def test_list_files_raw():
+    """
+    Check listing of files of tile_ref in the server
+    """
+    io_config = IOConfig()
+    io = IO(io_config)
+    tile_ref = TileRef(2020, '33TUM', 'NDVI_raw')
+    image_refs, df = io.list_files_on_server(tile_ref, 'raw')
+    assert type(image_refs) == list and len(image_refs) > 0
+    assert type(df) == pd.DataFrame and len(df) > 0
+    assert set(df.year_f.unique()) == {'2020'}
+    assert set(df.tile_f.unique()) == {'33TUM'}
+    assert set(df.product_f.unique()) == {'NDVI_raw'}
+    io.close_connection()
+
+
+def test_list_files_crop():
+    """
+    Check listing of files of tile_ref in the server
+    """
+    io_config = IOConfig()
+    io = IO(io_config)
+    tile_ref = TileRef(2020, '33TUM', 'NDVI_raw')
+    image_refs, df = io.list_files_on_server(tile_ref, 'crop')
+    assert set(df.year_f.unique()) == {'2020'}
+    assert set(df.tile_f.unique()) == {'33TUM'}
+    assert set(df.product_f.unique()) == {'NDVI_raw'}
+    io.close_connection()
+
+
+def test_list_all_files_raw():
+    """
+    Check listing of all files of type 'raw' in the server
+    """
+    io_config = IOConfig()
+    io = IO(io_config)
+    df = io.list_all_files_of_type('raw')
+    assert type(df) == pd.DataFrame and len(df) > 0
+    assert set(df.year_f.unique()) == set(io.config.available_years)
+    assert set(df.tile_f.unique()) == set(io.config.available_tiles)
+    assert set(df.product_f.unique()) == set(io.config.available_products)
+    io.close_connection()
+
+
+def test_list_all_files_crop():
+    """
+    Check listing of all files of type 'crop' in the server
+    """
+    io_config = IOConfig()
+    io = IO(io_config)
+    df = io.list_all_files_of_type('crop')
+    assert type(df) == pd.DataFrame and len(df) > 0
+    io.close_connection()
+
+
+if __name__ == '__main__':
+    pytest.main([''])

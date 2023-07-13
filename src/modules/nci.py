@@ -44,12 +44,12 @@ class NCI:
         # Get all images that still have no computed NCI
         nci_done = self._records.loc[
             (self._records['from'] == 'crop') & (self._records['to'] == 'nci'),
-            ['year', 'tile', 'product', 'filename']
+            ['year', 'tile', 'product', 'filename_from']
         ].rename(columns={'filename_from': 'filename'})
         images_df = images_df.merge(nci_done, how='left', on=['year', 'tile', 'product', 'filename'], indicator=True)
         to_compute = images_df.loc[images_df['_merge'] == 'left_only',
         ['year', 'tile', 'product', 'filename']].sort_values(by=['year', 'tile', 'product', 'filename'])
-        image_refs = [ImageRef(row.filename, row.year, row.tile, row.product, type='raw')
+        image_refs = [ImageRef(row.filename, row.year, row.tile, row.product, type='crop')
                       for row in to_compute.itertuples()]
 
         print(f'Filters: {self._config.filters}')
@@ -136,10 +136,10 @@ class NCI:
         - the spatial reference system is the same as the one of the image
         - LZW compression is used
         - NCI for (image_1 -> image_2) will be saved in the directory of image_1
-        - will have name: - 'nci_{image_1.product}_{image_1.year}_{image_1.tile}_{image_1.date}.tif'
+        - will have name: - 'nci{neigh_size}_{image_1.product}_{image_1.year}_{image_1.tile}_{image_1.date}.tif'
 
         Args:
-            nci: tf.Tensor with the NCI to save. Shape: (image.height, image.width, 3)
+            nci: tf.Tensor with the NCI to save. Shape: (image.height, image.width, 4)
             image: ImageRef object for the first image in the pair
             srs: string with the spatial reference system of the image
 
@@ -150,10 +150,10 @@ class NCI:
         dir = f'{self._io.config.base_local_dir}/nci/{image.tile_ref.to_subpath()}'
         self._io.check_existence_on_local(dir, dir=True)
 
-        filename_aux = f'nci_{image.product}_{image.year}_{image.tile}_{image.extract_date()}_aux.tif'
+        filename_aux = f"nci{self._n_size}_{image.product}_{image.year}_{image.tile}_{image.extract_date()}_aux.tif"
         filepath_aux = f'{dir}/{filename_aux}'
 
-        filename = f'nci_{image.product}_{image.year}_{image.tile}_{image.extract_date()}.tif'
+        filename = f'nci{self._n_size}_{image.product}_{image.year}_{image.tile}_{image.extract_date()}.tif'
         filepath = f'{dir}/{filename}'
 
         # Check if image already exists. If so, overwrite it
@@ -179,10 +179,10 @@ class NCI:
         dataset = None
 
         # Use gdal translate to compress the image using LZW
-        gdal.Translate(filepath_aux, filepath, options='-co COMPRESS=LZW')
+        gdal.Translate(filepath, filepath_aux, options='-co COMPRESS=LZW')
 
         # Delete the auxiliary file
-        io.delete_local_file(ImageRef(filename_aux, tile_ref=image.tile_ref, type='nci'))
+        self._io.delete_local_file(ImageRef(filename_aux, tile_ref=image.tile_ref, type='nci'))
 
         return ImageRef(filename, tile_ref=image.tile_ref, type='nci')
 
@@ -216,13 +216,14 @@ class NCI:
         Computes the NCI between two images. Definiton of the NCI:
         - https://linkinghub.elsevier.com/retrieve/pii/S0034425705002919
         We delete the intermediate tf.Tensors to free up memory as soon as they are not needed anymore.
+        Additionally, saves the centered second image.
 
         Args:
             r_1: np.ndarray with the first image
             r_2: np.ndarray with the second image
 
         Returns:
-            nci: tf.Tensor with the NCI between the two images. Shape: (3, image.height, image.width)
+            nci: tf.Tensor with the NCI between the two images. Shape: (4, image.height, image.width)
                  The three bands correspond to the correlation r, the intercept a, and the slope b.
         """
         r_1 = tf.convert_to_tensor(r_1, dtype=tf.float32, name='r_1')
@@ -243,6 +244,7 @@ class NCI:
             self.apply_convolutions(tf.square(centered_1), self._n_size, filter_values=1 / (self._n_size ** 2 - 1)))
         std_2 = tf.sqrt(
             self.apply_convolutions(tf.square(centered_2), self._n_size, filter_values=1 / (self._n_size ** 2 - 1)))
+        del centered_1
 
         # Compute NCI
         r = tf.divide(cov, tf.multiply(std_1, std_2))
@@ -252,9 +254,9 @@ class NCI:
         b = tf.subtract(mean_2, tf.multiply(a, mean_1))
         del mean_1, mean_2
 
-        # Stack the three images in one tensor
-        nci_result = tf.stack([r, a, b], axis=0)
-        del r, a, b
+        # Stack the four images in one tensor
+        nci_result = tf.stack([r, a, b, centered_2], axis=0)
+        del r, a, b, centered_2
 
         return nci_result
 

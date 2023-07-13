@@ -18,7 +18,7 @@ if __name__ == "__main__":
 
     module = {
         'crop': IntersectAOI(config=config, io=io_manager),
-        'modules': NCI(config=config, io=io_manager)
+        'nci': NCI(config=config, io=io_manager)
     }.get(config.execute, KeyError(f'{config.execute} is not a valid module.'))
 
     module.run()

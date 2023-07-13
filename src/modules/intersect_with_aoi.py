@@ -83,7 +83,12 @@ class IntersectAOI:
         self._io.check_existence_on_local(dir, dir=True)
         self._io.check_existence_on_local(filepath, dir=False)
 
-        clip_filename = f'crop_{image.product}_{image.year}_{image.tile}_{image.extract_date()}.tif'
+        rename_product = {
+            'NDVI_raw': 'NDVIraw',
+        }
+
+        clip_filename = f'crop_{rename_product.get(image.product, image.product)}_{image.year}_' \
+                        f'{image.tile}_{image.extract_date()}.tif'
         clip_image_ref = ImageRef(clip_filename, tile_ref=image.tile_ref, type='crop')
         clip_dir = f'{self._io.config.base_local_dir}/{clip_image_ref.rel_dir()}'
         clip_filepath = f'{self._io.config.base_local_dir}/{clip_image_ref.rel_filepath()}'

@@ -114,7 +114,7 @@ class IO:
 
         dir = self.build_remote_dir_for_tile(tile_ref, image_type=image_type)
 
-        # Check if directory exists
+        # Check if directory exists. Will create it if it does not exist
         self.check_existence_on_server(dir, dir=True)
 
         # Run command to list all filenames and sizes
@@ -125,9 +125,12 @@ class IO:
         # Filter out files that are not .tif
         df = df[df['filename'].str.endswith('.tif')]
 
+        if df.empty:
+            return [], df
+
         # Convert size to Mb, store year, tile and product
         df['size'] = df['size'].str[:-1].astype('float')
-        df['year'] = tile_ref.year
+        df['year'] = str(tile_ref.year)
         df['tile'] = tile_ref.tile
         df['product'] = tile_ref.product
 
@@ -153,21 +156,21 @@ class IO:
         else:
             df = df.join(df['filename'].str.split('_', expand=True))
             # We denote colname_f if the columns are reconstructed from the filename
-            df['built_tile_f'] = df[4]
-            df['year_f'] = df[3]
-            df['x_f'] = df[5]
-            df['tile_f'] = df[4]
-            df['date_f'] = df[5].str.split('.', expand=True)[0]
+            df['built_tile_f'] = df[3]
+            df['year_f'] = df[2]
+            df['tile_f'] = df[3]
+            df['date_f'] = df[4].str.split('.', expand=True)[0]
             df['date_f'] = pd.to_datetime(df['date_f'], format='%Y%m%d')
-            df['extension_f'] = df[5].str.split('.', expand=True)[1]
+            df['extension_f'] = df[4].str.split('.', expand=True)[1]
             df['month_f'] = df['date_f'].dt.month
+            df['x_f'] = np.NAN
             df['y_f'] = np.NAN
             df['base_product_f'] = np.NAN
 
-            product_map = {'NDVI': 'NDVI_raw'}
+            product_map = {'NDVIraw': 'NDVI_raw'}
             df['product_f'] = df[1].map(lambda x: product_map.get(x, x))
 
-            df.drop(columns=list(range(6)), inplace=True)
+            df.drop(columns=list(range(5)), inplace=True)
 
         # Filter by product
         df = df[df['product_f'] == tile_ref.product]
