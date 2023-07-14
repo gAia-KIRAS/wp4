@@ -22,6 +22,9 @@ class NCI(Module):
         _n_size (int): size of the neighborhood
     """
 
+    def run_on_server(self):
+        pass
+
     def __init__(self, config: Config, io: IO):
         super().__init__(config, io)
 
