@@ -8,10 +8,11 @@ import time
 from src.config.config import Config
 from src.config.io_config import IOConfig
 from src.io.io_manager import IO
+from src.modules.abstract_module import Module
 from src.utils import ImageRef, TileRef, timestamp, RECORDS_FILE_COLUMNS
 
 
-class NCI:
+class NCI(Module):
     """
     Class for the calculation of Neighborhood Correlation Images on consecutive Sentinel-2 images.
 
@@ -22,11 +23,7 @@ class NCI:
     """
 
     def __init__(self, config: Config, io: IO):
-        self._io = io
-        self._config = config
-
-        self._records = self._io.get_records()
-        self._time_limit = self._config.time_limit
+        super().__init__(config, io)
 
         self._n_size = self._config.nci_conf['n_size']
 

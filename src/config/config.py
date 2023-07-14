@@ -16,7 +16,7 @@ class Config:
 
         # Execution:
         self._execute_module = self._config['execute']['module']
-        self._time_limit = self._config['execute']['time_limit']
+        self._time_limit = int(self._config['execute']['time_limit'])
         self._filters = self._config['execute']['filters']
 
         # NCI parameters
