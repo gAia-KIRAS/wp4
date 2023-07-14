@@ -5,9 +5,27 @@ from src.modules.nci import NCI
 from src.config.io_config import IOConfig
 from src.io.io_manager import IO
 from src.modules.intersect_with_aoi import IntersectAOI
+import argparse
+
+
+def parse_arguments():
+    """
+    Parses the arguments passed to the script.
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--server_execution', action='store_true',
+                        help='If this flag is set to true, the script is being executed on the server')
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
+    # We might reach this point in three different ways:
+    # 1. Locally, and we want to execute locally
+    # 2. Locally, but we want to execute on the server
+    # 3. On the server, and we want to execute on the server
+
+    args = parse_arguments()
+
     config = Config()
     io_config = IOConfig()
     io_manager = IO(io_config)
@@ -21,8 +39,36 @@ if __name__ == "__main__":
         'nci': NCI(config=config, io=io_manager)
     }.get(config.execute, KeyError(f'{config.execute} is not a valid module.'))
 
-    module.run()
-    io_manager.close_connection()
+    if args.server_execution:
+        # This means that we are on the server, and we want to execute on the server
+        module.run_on_server()
+
+        # Copy the records from server to local
+        io_manager.update_records_on_local()
+
+    else:
+
+        if config.execution_where == 'local':
+            # This means that we are on the local machine, and we want to execute locally
+
+            module.run()
+            io_manager.close_connection()
+
+        elif config.execution_where == 'server':
+            # This means that we are on the local machine, and we want to execute on the server
+
+            # 1. Upload the config.yaml file to the server
+            io_manager.upload_config()
+            # 2. Upload the inventory data to the server, in case it is not there
+            io_manager.upload_inventory()
+            # 3. Upload the operations data to the server
+            io_manager.upload_operations()
+
+            # 4. Execute the module
+            # TODO: use the 'nice' command to manage cpu usage and priority
+            command = f'python main.py --server_execution'
+            io_manager.run_command(command)
+
 
     if config.profiling_active:
         profiler.stop()

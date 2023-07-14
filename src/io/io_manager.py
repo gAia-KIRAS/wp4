@@ -437,6 +437,10 @@ class IO:
             images_df = images_df.loc[images_df['tile'].isin(filters['tile'])]
         return images_df
 
+    def upload_config(self):
+        pass
+
     @property
     def config(self):
         return self._config
+

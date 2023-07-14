@@ -195,3 +195,6 @@ class IntersectAOI:
                                self._records['timestamp'].between(start_timestamp, timestamp())])
 
         print(f'Unsuccessful intersections: {unsuccessful}')
+
+    def run_on_server(self):
+        pass

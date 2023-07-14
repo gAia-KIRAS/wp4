@@ -18,6 +18,8 @@ class NCI:
     Attributes:
         _config (Config): Config object with the configuration parameters
         _io (IO): IO object with the input/output parameters
+        _records (pd.DataFrame): records DataFrame, as defined in IO.get_records()
+        _time_limit (int): time limit in minutes for run method
         _n_size (int): size of the neighborhood
     """
 

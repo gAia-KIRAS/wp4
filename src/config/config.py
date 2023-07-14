@@ -18,6 +18,7 @@ class Config:
         self._execute_module = self._config['execute']['module']
         self._time_limit = self._config['execute']['time_limit']
         self._filters = self._config['execute']['filters']
+        self._execute_where = self._config['execute']['where']
 
         # NCI parameters
         self._nci_conf = self._config['nci']
@@ -51,3 +52,7 @@ class Config:
     @property
     def filters(self) -> dict:
         return self._filters
+
+    @property
+    def execution_where(self) -> str:
+        return self._execute_where
