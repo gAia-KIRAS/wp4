@@ -7,11 +7,12 @@ from osgeo import gdal
 
 from src.config.config import Config
 from src.io.io_manager import IO
-from src.utils import ImageRef, TileRef, timestamp, RECORDS_FILE_COLUMNS
+from src.modules.abstract_module import Module
+from src.utils import ImageRef, timestamp, RECORDS_FILE_COLUMNS
 from typing import Union
 
 
-class IntersectAOI:
+class IntersectAOI(Module):
     """
     This module does the step: RAW -> CROP
     It intersects the Area of Interest (AOI) with the raw images and saves the result as a new .tif file.
@@ -24,11 +25,9 @@ class IntersectAOI:
     """
 
     def __init__(self, io: IO, config: Config):
-        self._io = io
-        self._config = config
+        super().__init__(config, io)
+
         self._check_aoi()
-        self._records = self._io.get_records()
-        self._time_limit = self._config.time_limit
 
     def _check_aoi(self):
         """
@@ -72,15 +71,15 @@ class IntersectAOI:
 
         Returns:
             clip_image_ref (ImageRef | None): If the intersection was successful, returns an ImageRef
-             object with the clipped image. Has the attribute type set to 'crop'. Otherwise (if the
+             object with the clipped image. Has the attribute type set to 'crop'. Otherwise, (if the
              raster does not have a valid SRS), returns None.
         """
         print(f'Intersecting image {image} with the AOI.')
-        dir = f'{self._io.config.base_local_dir}/{image.rel_dir()}'
+        local_dir = f'{self._io.config.base_local_dir}/{image.rel_dir()}'
         filepath = f'{self._io.config.base_local_dir}/{image.rel_filepath()}'
 
         # Check existance of the file and the directory
-        self._io.check_existence_on_local(dir, dir=True)
+        self._io.check_existence_on_local(local_dir, dir=True)
         self._io.check_existence_on_local(filepath, dir=False)
 
         rename_product = {
@@ -139,8 +138,8 @@ class IntersectAOI:
 
         # Get all images that still have to be intersected
         intersected = self._records.loc[
-            (self._records['from'] == "raw") & (self._records['to'] == "crop") & (self._records['success'] == 1)
-            , ['year', 'tile', 'product', 'filename_from']
+            (self._records['from'] == "raw") & (self._records['to'] == "crop") & (self._records['success'] == 1),
+            ['year', 'tile', 'product', 'filename_from']
         ].rename(columns={'filename_from': 'filename'})
         images_df = images_df.merge(intersected, how='left', indicator=True, on=['year', 'tile', 'product', 'filename'])
         to_intersect = images_df.loc[images_df['_merge'] == 'left_only',
@@ -157,7 +156,8 @@ class IntersectAOI:
         i = 0
         while i < len(image_refs) and time.time() - start_time < self._time_limit * 60:
             print(f' -- Processing image {i + 1} of {len(image_refs)} '
-                  f'({round((i + 1) * 100 / len(image_refs), 2)}%). Time elapsed: {round((time.time() - start_time) / 60, 2)} minutes. --')
+                  f'({round((i + 1) * 100 / len(image_refs), 2)}%). '
+                  f'Time elapsed: {round((time.time() - start_time) / 60, 2)} minutes. --')
             image_ref = image_refs[i]
 
             # Download the image (if not available locally, handled by IO)
@@ -169,7 +169,8 @@ class IntersectAOI:
             # Delete raw image locally
             self._io.delete_local_file(image_ref)
             if crop_image_ref is None:
-                record = ['raw', 'crop', image_ref.tile, image_ref.year, image_ref.product, timestamp(), image_ref.filename, None, 0]
+                record = ['raw', 'crop', image_ref.tile, image_ref.year,
+                          image_ref.product, timestamp(), image_ref.filename, None, 0]
                 self._records.loc[len(self._records)] = record
                 continue
 
