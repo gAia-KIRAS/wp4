@@ -1,11 +1,11 @@
 from pyinstrument import Profiler
-from src.config.config import Config
+import argparse
 
+from config.config import Config
 from modules.nci import NCI
 from config.io_config import IOConfig
 from io.io_manager import IO
 from modules.intersect_with_aoi import IntersectAOI
-import argparse
 
 
 def parse_arguments():
