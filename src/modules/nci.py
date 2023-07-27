@@ -215,7 +215,7 @@ class NCI(Module):
 
     def compute_nci(self, r_1: np.ndarray, r_2: np.ndarray) -> tf.Tensor:
         """
-        Computes the NCI between two images. Definiton of the NCI:
+        Computes the NCI between two images. Definition of the NCI:
         - https://linkinghub.elsevier.com/retrieve/pii/S0034425705002919
         We delete the intermediate tf.Tensors to free up memory as soon as they are not needed anymore.
         Additionally, saves the centered second image.

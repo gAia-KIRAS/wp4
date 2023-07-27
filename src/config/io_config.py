@@ -21,11 +21,16 @@ class IOConfig:
         self._base_local_dir = os.path.join(self._root, self._config['paths']['base_local_dir'])
         self._temp_dir = os.path.join(self._base_local_dir, self._config['paths']['temp_dir'])
 
-        self._aoi_path = {
-            "shp": os.path.join(self._base_local_dir, self._config['files']['aoi_shp']),
-            "gpkg": os.path.join(self._base_local_dir, self._config['files']['aoi_gpkg'])
+        self._aoi_rel_path = {
+            "shp": self._config['files']['aoi_shp'],
+            "gpkg": self._config['files']['aoi_gpkg']
         }
-        self._inventory_path = os.path.join(self._base_local_dir, self._config['files']['inventory'])
+        self._aoi_path = {
+            "shp": os.path.join(self._base_local_dir, self._aoi_rel_path['shp']),
+            "gpkg": os.path.join(self._base_local_dir, self._aoi_rel_path['gpkg'])
+        }
+        self._inventory_rel_path = self._config['files']['inventory']
+        self._inventory_path = os.path.join(self._base_local_dir, self._inventory_rel_path)
         self._records_path = os.path.join(self._base_local_dir, self._config['files']['records'])
         self._all_images_path = {
             image_type: os.path.join(self._base_local_dir, image_type_path)
@@ -61,6 +66,10 @@ class IOConfig:
         return self._config['paths']['base_server_dir']
 
     @property
+    def server_repo_root(self) -> str:
+        return self._config['paths']['server_repo_root']
+
+    @property
     def temp_dir(self) -> str:
         return self._temp_dir
 
@@ -85,8 +94,16 @@ class IOConfig:
         return self._aoi_path
 
     @property
+    def aoi_rel_path(self) -> Dict[str, str]:
+        return self._aoi_rel_path
+
+    @property
     def inventory_path(self) -> str:
         return self._inventory_path
+
+    @property
+    def inventory_rel_path(self) -> str:
+        return self._inventory_rel_path
 
     @property
     def records_path(self) -> str:
@@ -95,3 +112,7 @@ class IOConfig:
     @property
     def all_images_path(self) -> dict:
         return self._all_images_path
+
+    @property
+    def config_path(self) -> str:
+        return self._config_path

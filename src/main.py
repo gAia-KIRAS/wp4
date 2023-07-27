@@ -1,10 +1,10 @@
 from pyinstrument import Profiler
 from src.config.config import Config
 
-from src.modules.nci import NCI
-from src.config.io_config import IOConfig
-from src.io.io_manager import IO
-from src.modules.intersect_with_aoi import IntersectAOI
+from modules.nci import NCI
+from config.io_config import IOConfig
+from io.io_manager import IO
+from modules.intersect_with_aoi import IntersectAOI
 import argparse
 
 
@@ -23,6 +23,8 @@ if __name__ == "__main__":
     # 1. Locally, and we want to execute locally
     # 2. Locally, but we want to execute on the server
     # 3. On the server, and we want to execute on the server
+
+    print('heyyyyyyy')
 
     args = parse_arguments()
 
@@ -66,9 +68,9 @@ if __name__ == "__main__":
 
             # 4. Execute the module
             # TODO: use the 'nice' command to manage cpu usage and priority
-            command = f'python main.py --server_execution'
-            io_manager.run_command(command)
 
+            command = f'nice -n 10 python {io_manager.config.server_repo_root}/src/main.py --server_execution'
+            io_manager.run_command(command)
 
     if config.profiling_active:
         profiler.stop()

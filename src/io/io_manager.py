@@ -63,7 +63,7 @@ class IO:
         """
 
         if dir:
-            # Check if directory exists. If not, raise an exception
+            # Check if directory exists. If not, create it
             command = f'test -d {remote_path}/ && echo "True" || echo "False"'
             stdin, stdout, stderr = self._ssh_client.exec_command(command)
             if stdout.readlines()[0].strip() == 'False':
@@ -437,8 +437,74 @@ class IO:
             images_df = images_df.loc[images_df['tile'].isin(filters['tile'])]
         return images_df
 
-    def upload_config(self):
-        pass
+    def upload_config(self) -> None:
+        """
+        Upload the config.yaml and io_config.yaml files to the server. Always replace the existing ones.
+        """
+        sftp = self._ssh_client.open_sftp()
+
+        # 1. copy io_config.yaml to server
+        local_io_config_path = f'{self._config.config_path}'
+        server_io_config_path = f'{self._config.server_repo_root}/io_config.yaml'
+        self.check_existence_on_local(local_io_config_path)
+        sftp.put(local_io_config_path, server_io_config_path)
+
+        # 2. copy config.yaml to server
+        local_config_path = local_io_config_path.replace('io_config.yaml', 'config.yaml')
+        server_io_config_path = f'{self._config.server_repo_root}/config.yaml'
+        self.check_existence_on_local(local_config_path)
+        sftp.put(local_config_path, server_io_config_path)
+
+        sftp.close()
+
+    def upload_inventory(self):
+        """
+        Upload the inventory and aoi files to the server if they are not there. On the server, they are located in
+        newstorage2/wp4/inventory. We do not copy the whole inventory folder, only the three needed files.
+        """
+        sftp = self._ssh_client.open_sftp()
+
+        self.check_existence_on_server(f'{self._config.base_server_dir}/wp4/inventory', dir=True)
+        server_path_inventory = f'{self._config.base_server_dir}/wp4/{self._config.inventory_rel_path}'
+        server_path_aoi_shp = f'{self._config.base_server_dir}/wp4/{self._config.aoi_rel_path["shp"]}'
+        server_path_aoi_gpkg = f'{self._config.base_server_dir}/wp4/{self._config.aoi_rel_path["gpkg"]}'
+
+        try:
+            self.check_existence_on_server(server_path_inventory, dir=False)
+        except FileNotFoundError:
+            sftp.put(self._config.inventory_path, server_path_inventory)
+
+        try:
+            self.check_existence_on_server(server_path_aoi_shp, dir=False)
+        except FileNotFoundError:
+            sftp.put(self._config.aoi_path['shp'], server_path_aoi_shp)
+
+        try:
+            self.check_existence_on_server(server_path_aoi_gpkg, dir=False)
+        except FileNotFoundError:
+            sftp.put(self._config.aoi_path['gpkg'], server_path_aoi_gpkg)
+
+        sftp.close()
+
+    def upload_operations(self):
+        """
+        Overwrite the operations folder in the server with the local one. The operations folder is located in
+        newstorage2/wp4/operation_records. We copy the whole folder.
+        """
+        sftp = self._ssh_client.open_sftp()
+
+        local_operations_path = f'{self._config.base_local_dir}/operation_records'
+        server_operations_path = f'{self._config.base_server_dir}/wp4/operation_records'
+        self.check_existence_on_server(server_operations_path, dir=True)
+
+        # List all files in the local operations folder using os.listdir
+        local_operations_files = os.listdir(local_operations_path)
+
+        # For each of the files, do sftp.put to the server with the same file name
+        for file in local_operations_files:
+            sftp.put(f'{local_operations_path}/{file}', f'{server_operations_path}/{file}')
+
+        sftp.close()
 
     @property
     def config(self):
