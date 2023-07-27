@@ -1,5 +1,5 @@
 import warnings
-import gdal
+from osgeo import gdal
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -7,7 +7,7 @@ import time
 
 from src.config.config import Config
 from src.config.io_config import IOConfig
-from src.io.io_manager import IO
+from src.io_manager.io_manager import IO
 from src.modules.abstract_module import Module
 from src.utils import ImageRef, TileRef, timestamp, RECORDS_FILE_COLUMNS
 

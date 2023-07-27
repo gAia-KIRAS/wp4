@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from src.config.io_config import IOConfig
-from src.io.io_manager import IO
+from src.io_manager.io_manager import IO
 from src.utils import TileRef, ImageRef, RECORDS_FILE_COLUMNS
 
 

@@ -6,7 +6,7 @@ import pandas as pd
 from osgeo import gdal
 
 from src.config.config import Config
-from src.io.io_manager import IO
+from src.io_manager.io_manager import IO
 from src.modules.abstract_module import Module
 from src.utils import ImageRef, timestamp, RECORDS_FILE_COLUMNS
 from typing import Union

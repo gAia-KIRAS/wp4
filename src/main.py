@@ -4,7 +4,7 @@ import argparse
 from config.config import Config
 from modules.nci import NCI
 from config.io_config import IOConfig
-from io.io_manager import IO
+from io_manager.io_manager import IO
 from modules.intersect_with_aoi import IntersectAOI
 
 
@@ -23,8 +23,6 @@ if __name__ == "__main__":
     # 1. Locally, and we want to execute locally
     # 2. Locally, but we want to execute on the server
     # 3. On the server, and we want to execute on the server
-
-    print('heyyyyyyy')
 
     args = parse_arguments()
 
