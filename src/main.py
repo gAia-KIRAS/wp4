@@ -67,7 +67,11 @@ if __name__ == "__main__":
             # 4. Execute the module
             # TODO: use the 'nice' command to manage cpu usage and priority
 
-            command = f'nice -n 10 python {io_manager.config.server_repo_root}/src/main.py --server_execution'
+            command = f"""
+            git pull;
+            conda activate wp4_env;
+            nice -n 10 python {io_manager.config.server_repo_root}/src/main.py --server_execution'
+            """
             io_manager.run_command(command)
 
     if config.profiling_active:
