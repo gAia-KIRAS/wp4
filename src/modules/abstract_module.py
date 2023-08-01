@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 
 from src.config.config import Config
 from src.io_manager.io_manager import IO

@@ -2,14 +2,19 @@ import warnings
 from osgeo import gdal
 import numpy as np
 import pandas as pd
-import tensorflow as tf
+import torch
 import time
 
 from src.config.config import Config
 from src.config.io_config import IOConfig
 from src.io_manager.io_manager import IO
 from src.modules.abstract_module import Module
-from src.utils import ImageRef, TileRef, timestamp, RECORDS_FILE_COLUMNS
+from src.utils import ImageRef, TileRef, timestamp, RECORDS_FILE_COLUMNS, FakeTFTypeHints
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = FakeTFTypeHints()
 
 
 class NCI(Module):
@@ -19,9 +24,8 @@ class NCI(Module):
     Attributes:
         _config (Config): Config object with the configuration parameters
         _io (IO): IO object with the input/output parameters
-        _records (pd.DataFrame): records DataFrame, as defined in IO.get_records()
-        _time_limit (int): time limit in minutes for run method
         _n_size (int): size of the neighborhood
+        _conv_lib (str): library to use in the convolution calculations ('torch' or 'tf')
     """
 
     def run_on_server(self):
@@ -31,6 +35,7 @@ class NCI(Module):
         super().__init__(config, io)
 
         self._n_size = self._config.nci_conf['n_size']
+        self._conv_lib = self._config.nci_conf['conv_lib']
 
     @property
     def n_size(self) -> int:
@@ -131,7 +136,7 @@ class NCI(Module):
 
         return filepath_1, filepath_2
 
-    def save_nci(self, nci: tf.Tensor, image: ImageRef, srs: str) -> ImageRef:
+    def save_nci(self, nci: tf.Tensor | torch.Tensor, image: ImageRef, srs: str) -> ImageRef:
         """
         Saves the NCI locally. The NCI is saved according to the following rules:
         - saved as a .tif file. Therefore, when loaded, it is an image with 3 channels
@@ -141,7 +146,7 @@ class NCI(Module):
         - will have name: - 'nci{neigh_size}_{image_1.product}_{image_1.year}_{image_1.tile}_{image_1.date}.tif'
 
         Args:
-            nci: tf.Tensor with the NCI to save. Shape: (image.height, image.width, 4)
+            nci: tf or torch Tensor with the NCI to save. Shape: (4, image.height, image.width)
             image: ImageRef object for the first image in the pair
             srs: string with the spatial reference system of the image
 
@@ -208,14 +213,72 @@ class NCI(Module):
         # Get SRS from image_1
         srs = gdal.Open(filepath_1).GetProjection()
 
-        nci_result = self.compute_nci(r_1, r_2)
+        # Compute NCI using the selected library
+        if self._conv_lib == 'torch':
+            nci_result = self.compute_nci_with_torch(r_1, r_2)
+        elif self._conv_lib == 'tf':
+            nci_result = self.compute_nci_with_tf(r_1, r_2)
+        else:
+            raise ValueError(f'Convolution library {self._conv_lib} not recognized')
+
+        # Save the NCI
         new_image = self.save_nci(nci_result, image_1, srs)
 
         return new_image
 
-    def compute_nci(self, r_1: np.ndarray, r_2: np.ndarray) -> tf.Tensor:
+    def compute_nci_with_torch(self, r_1: np.ndarray, r_2: np.ndarray) -> torch.Tensor:
         """
-        Computes the NCI between two images. Definition of the NCI:
+        Computes the NCI between two images using PyTorch. Definiton of the NCI:
+        - https://linkinghub.elsevier.com/retrieve/pii/S0034425705002919
+        We delete the intermediate torch.Tensors to free up memory as soon as they are not needed anymore.
+        Additionally, saves the centered second image.
+
+        Args:
+            r_1: np.ndarray with the first image
+            r_2: np.ndarray with the second image
+
+        Returns:
+            nci: torch .Tensor with the NCI between the two images. Shape: (4, image.height, image.width)
+                 The four bands correspond to the correlation r, the intercept a, the slope b, and pix_vs_avg.
+        """
+        r_1 = torch.from_numpy(r_1)
+        r_2 = torch.from_numpy(r_2)
+
+        # Compute image of means according to filter size, and center the image (substract mean)
+        mean_1 = self.apply_convolutions_torch(r_1, self._n_size, filter_values=1 / (self._n_size ** 2))
+        mean_2 = self.apply_convolutions_torch(r_2, self._n_size, filter_values=1 / (self._n_size ** 2))
+
+        # Subtract mean to the images
+        centered_1 = torch.sub(r_1, mean_1)
+        del r_1
+        centered_2 = torch.sub(r_2, mean_2)
+        del r_2
+
+        cov = self.apply_convolutions_torch(torch.mul(centered_1, centered_2), self._n_size,
+                                            filter_values=1 / (self._n_size ** 2 - 1))
+
+        std_1 = torch.sqrt(
+            self.apply_convolutions_torch(torch.square(centered_1), self._n_size, filter_values=1 / (self._n_size ** 2 - 1)))
+        std_2 = torch.sqrt(
+            self.apply_convolutions_torch(torch.square(centered_2), self._n_size, filter_values=1 / (self._n_size ** 2 - 1)))
+        del centered_1
+
+        r = torch.div(cov, torch.mul(std_1, std_2))
+        del std_2
+        a = torch.div(cov, torch.square(std_1))
+        del cov, std_1
+        b = torch.sub(mean_2, torch.mul(a, mean_1))
+        del mean_1, mean_2
+
+        # Stack the four images in one tensor
+        nci_result = torch.stack([r, a, b, centered_2], dim=0)
+        del r, a, b, centered_2
+
+        return nci_result
+
+    def compute_nci_with_tf(self, r_1: np.ndarray, r_2: np.ndarray) -> tf.Tensor:
+        """
+        Computes the NCI between two images using Tensorflow. Definition of the NCI:
         - https://linkinghub.elsevier.com/retrieve/pii/S0034425705002919
         We delete the intermediate tf.Tensors to free up memory as soon as they are not needed anymore.
         Additionally, saves the centered second image.
@@ -226,26 +289,29 @@ class NCI(Module):
 
         Returns:
             nci: tf.Tensor with the NCI between the two images. Shape: (4, image.height, image.width)
-                 The three bands correspond to the correlation r, the intercept a, and the slope b.
+                 The four bands correspond to the correlation r, the intercept a, the slope b, and pix_vs_avg.
         """
+        assert not isinstance(tf, FakeTFTypeHints), \
+            f'Tensorflow is not installed. Change the convolution library (nci/conv_lib parameter) to "torch".'
+
         r_1 = tf.convert_to_tensor(r_1, dtype=tf.float32, name='r_1')
         r_2 = tf.convert_to_tensor(r_2, dtype=tf.float32, name='r_2')
 
         # Compute image of means according to filter size, and center the image (substract mean)
-        mean_1 = self.apply_convolutions(r_1, self._n_size, filter_values=1 / (self._n_size ** 2))
-        mean_2 = self.apply_convolutions(r_2, self._n_size, filter_values=1 / (self._n_size ** 2))
+        mean_1 = self.apply_convolutions_tf(r_1, self._n_size, filter_values=1 / (self._n_size ** 2))
+        mean_2 = self.apply_convolutions_tf(r_2, self._n_size, filter_values=1 / (self._n_size ** 2))
         centered_1 = tf.subtract(r_1, mean_1)
         del r_1
         centered_2 = tf.subtract(r_2, mean_2)
         del r_2
 
         # Compute covariance and standard deviations
-        cov = self.apply_convolutions(tf.multiply(centered_1, centered_2), self._n_size,
-                                      filter_values=1 / (self._n_size ** 2 - 1))
+        cov = self.apply_convolutions_tf(tf.multiply(centered_1, centered_2), self._n_size,
+                                         filter_values=1 / (self._n_size ** 2 - 1))
         std_1 = tf.sqrt(
-            self.apply_convolutions(tf.square(centered_1), self._n_size, filter_values=1 / (self._n_size ** 2 - 1)))
+            self.apply_convolutions_tf(tf.square(centered_1), self._n_size, filter_values=1 / (self._n_size ** 2 - 1)))
         std_2 = tf.sqrt(
-            self.apply_convolutions(tf.square(centered_2), self._n_size, filter_values=1 / (self._n_size ** 2 - 1)))
+            self.apply_convolutions_tf(tf.square(centered_2), self._n_size, filter_values=1 / (self._n_size ** 2 - 1)))
         del centered_1
 
         # Compute NCI
@@ -263,7 +329,7 @@ class NCI(Module):
         return nci_result
 
     @staticmethod
-    def apply_convolutions(raster, filter_size, filter_values=None):
+    def apply_convolutions_tf(raster: tf.Tensor, filter_size: int, filter_values=None) -> tf.Tensor:
         """
         Applies a 2D convolution to a raster. The filter is a square matrix of ones by default, and
         a matrix of values equal to filter_values if this is specified.
@@ -288,6 +354,21 @@ class NCI(Module):
             padding='SAME'
         )
         return tf.squeeze(output)
+
+    @staticmethod
+    def apply_convolutions_torch(raster, filter_size, filter_values=None):
+        filter = torch.ones((1, 1, filter_size, filter_size), dtype=torch.float32)
+        if filter_values is not None:
+            filter = filter.multiply(filter_values)
+
+        # Apply the filter to the raster
+        output = torch.nn.functional.conv2d(
+            torch.reshape(raster, (1, 1, raster.size()[0], raster.size()[1])),
+            filter,
+            stride=1,
+            padding='same'
+        )
+        return torch.squeeze(output)
 
 
 if __name__ == '__main__':
