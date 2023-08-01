@@ -108,6 +108,24 @@ class ImageRef:
         return date
 
 
+@dataclass
+class FakeTFTypeHints:
+    Tensor = None
+    convert_to_tensor = None
+    subtract = None
+    multiply = None
+    sqrt = None
+    square = None
+    divide = None
+    float32 = None
+    stack = None
+    ones = None
+    scalar_mul = None
+    nn = None
+    reshape = None
+    squeeze = None
+
+
 def timestamp() -> str:
     """
     Return a timestamp in the format YYYYMMDD_HHMMSS.
