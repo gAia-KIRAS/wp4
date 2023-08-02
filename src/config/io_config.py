@@ -70,10 +70,6 @@ class IOConfig:
         return self._config['paths']['server_repo_root']
 
     @property
-    def temp_dir(self) -> str:
-        return self._temp_dir
-
-    @property
     def base_local_dir(self) -> str:
         return self._base_local_dir
 
@@ -116,3 +112,17 @@ class IOConfig:
     @property
     def config_path(self) -> str:
         return self._config_path
+
+    def modify_paths_for_server(self):
+        self._base_local_dir = f'{self._config["paths"]["base_server_dir"]}/wp4'
+        self._aoi_path = {
+            "shp": os.path.join(self._base_local_dir, self._aoi_rel_path['shp']),
+            "gpkg": os.path.join(self._base_local_dir, self._aoi_rel_path['gpkg'])
+        }
+        self._inventory_rel_path = self._config['files']['inventory']
+        self._inventory_path = os.path.join(self._base_local_dir, self._inventory_rel_path)
+        self._records_path = os.path.join(self._base_local_dir, self._config['files']['records'])
+        self._all_images_path = {
+            image_type: os.path.join(self._base_local_dir, image_type_path)
+            for image_type, image_type_path in self._config['files']['all_images'].items()
+        }

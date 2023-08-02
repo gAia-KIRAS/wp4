@@ -30,6 +30,10 @@ if __name__ == "__main__":
     io_config = IOConfig()
     io_manager = IO(io_config)
 
+    if args.server_execution:
+        # Modify paths in io_config to match the server paths. Now local paths are server paths
+        io_config.modify_paths_for_server()
+
     profiler = Profiler()
     if config.profiling_active:
         profiler.start()
