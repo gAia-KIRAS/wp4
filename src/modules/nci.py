@@ -29,7 +29,7 @@ class NCI(Module):
     """
 
     def run_on_server(self):
-        pass
+        self.run()
 
     def __init__(self, config: Config, io: IO):
         super().__init__(config, io)

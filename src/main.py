@@ -39,9 +39,9 @@ if __name__ == "__main__":
         profiler.start()
 
     module = {
-        'crop': IntersectAOI(config=config, io=io_manager),
-        'nci': NCI(config=config, io=io_manager)
-    }.get(config.execute, KeyError(f'{config.execute} is not a valid module.'))
+        'crop': IntersectAOI,
+        'nci': NCI
+    }.get(config.execute, KeyError(f'{config.execute} is not a valid module.'))(config=config, io=io_manager)
 
     if args.server_execution:
         # This means that we are on the server, and we want to execute on the server
