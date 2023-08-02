@@ -1,6 +1,6 @@
-from src.config.io_config import IOConfig
-from src.io_manager.io_manager import IO
-from src.utils import TileRef
+from config.io_config import IOConfig
+from io_manager.io_manager import IO
+from utils import TileRef
 
 import pandas as pd
 

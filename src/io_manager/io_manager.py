@@ -7,8 +7,8 @@ import os
 import warnings
 import pickle
 
-from src.config.io_config import IOConfig
-from src.utils import ImageRef, TileRef, RECORDS_FILE_COLUMNS
+from config.io_config import IOConfig
+from utils import ImageRef, TileRef, RECORDS_FILE_COLUMNS
 
 
 class IO:

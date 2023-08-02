@@ -3,9 +3,9 @@ import shutil
 import pandas as pd
 import pytest
 
-from src.config.io_config import IOConfig
-from src.io_manager.io_manager import IO
-from src.utils import TileRef, ImageRef, RECORDS_FILE_COLUMNS
+from config.io_config import IOConfig
+from io_manager.io_manager import IO
+from utils import TileRef, ImageRef, RECORDS_FILE_COLUMNS
 
 
 def test_file_download():
