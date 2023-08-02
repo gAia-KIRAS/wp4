@@ -5,11 +5,11 @@ import pandas as pd
 import torch
 import time
 
-from src.config.config import Config
-from src.config.io_config import IOConfig
-from src.io_manager.io_manager import IO
-from src.modules.abstract_module import Module
-from src.utils import ImageRef, TileRef, timestamp, RECORDS_FILE_COLUMNS, FakeTFTypeHints
+from config.config import Config
+from config.io_config import IOConfig
+from io_manager.io_manager import IO
+from modules.abstract_module import Module
+from utils import ImageRef, TileRef, timestamp, RECORDS_FILE_COLUMNS, FakeTFTypeHints
 
 try:
     import tensorflow as tf
