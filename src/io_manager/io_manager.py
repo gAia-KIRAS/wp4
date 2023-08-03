@@ -136,7 +136,21 @@ class IO:
         df['tile'] = tile_ref.tile
         df['product'] = tile_ref.product
 
-        if image_type == 'raw':
+        if image_type == 'raw' and tile_ref.product == 'NDVI_reconstructed':
+            df = df.join(df['filename'].str.split('_', expand=True))
+            df['built_tile_f'] = df[0]
+            df['year_f'] = df[1]
+            df['date_f'] = pd.to_datetime(df[2], format='%Y%m%d')
+            df['product_f'] = df[3] + '_' + df[4].str.split('.', expand=True)[0]
+            df['extension_f'] = df[4].str.split('.', expand=True)[1]
+            df['month_f'] = df['date_f'].dt.month
+            df['x_f'] = np.NAN
+            df['y_f'] = np.NAN
+            df['base_product_f'] = np.NAN
+
+            df.drop(columns=list(range(5)), inplace=True)
+
+        elif image_type == 'raw':
             df = df.join(df['filename'].str.split('_', expand=True))
 
             # We denote colname_f if the columns are reconstructed from the filename
@@ -154,7 +168,6 @@ class IO:
             df['extension_f'] = df[10].str.split('.', expand=True)[1]
 
             df.drop(columns=list(range(11)), inplace=True)
-
         else:
             df = df.join(df['filename'].str.split('_', expand=True))
             # We denote colname_f if the columns are reconstructed from the filename

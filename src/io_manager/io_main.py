@@ -1,5 +1,5 @@
 from config.io_config import IOConfig
-from io_manager.io_manager import IO
+from io_manager import IO
 from utils import TileRef
 
 import pandas as pd
@@ -46,12 +46,9 @@ def list_all_files_and_save():
 
 
 if __name__ == '__main__':
-    # list_all_files_and_save()
+    # io_config = IOConfig()
+    # io = IO(io_config)
+
+    list_all_files_and_save()
     # check_dates()
-    io_config = IOConfig()
-    io = IO(io_config)
 
-    tile_ref = TileRef(2020, '33TUM', 'NDVI_raw')
-
-    io.list_files_on_server(tile_ref, image_type='raw')
-    io.list_files_on_server(tile_ref, image_type='crop')

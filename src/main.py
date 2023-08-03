@@ -79,7 +79,9 @@ if __name__ == "__main__":
             git pull;
             nice -n 10 {io_manager.config.server_python_executable} {io_manager.config.server_repo_root}/src/main.py --server_execution;
             """
-            io_manager.run_command(command)
+            out = io_manager.run_command(command)
+            print(out)
+            print(' -- Server execution finished -- ')
 
     if config.profiling_active:
         profiler.stop()
