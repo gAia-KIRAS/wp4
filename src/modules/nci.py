@@ -28,9 +28,6 @@ class NCI(Module):
         _conv_lib (str): library to use in the convolution calculations ('torch' or 'tf')
     """
 
-    def run_on_server(self):
-        pass
-
     def __init__(self, config: Config, io: IO):
         super().__init__(config, io)
 
@@ -45,7 +42,7 @@ class NCI(Module):
     def n_size(self, value: int):
         self._n_size = value
 
-    def run(self):
+    def run(self, on_the_server: bool = False) -> None:
         images_df = self._io.filter_all_images(image_type='crop', filters=self._config.filters)
 
         # Get all images that still have no computed NCI

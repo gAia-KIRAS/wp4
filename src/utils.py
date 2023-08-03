@@ -92,6 +92,7 @@ class ImageRef:
         """
         Extract date from the filepath.
         """
+        # TODO: extract date for reconstructed NDVI. They are type == 'raw' but have a different format
         if self.type is None:
             raise Exception('Type of image not set. Date cannot be extracted.')
         if self.type == 'raw':

@@ -113,6 +113,10 @@ class IOConfig:
     def config_path(self) -> str:
         return self._config_path
 
+    @property
+    def server_python_executable(self) -> str:
+        return self._config['paths']['server_python_executable']
+
     def modify_paths_for_server(self):
         self._base_local_dir = f'{self._config["paths"]["base_server_dir"]}/wp4'
         self._aoi_path = {

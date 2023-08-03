@@ -39,13 +39,16 @@ if __name__ == "__main__":
         profiler.start()
 
     module = {
-        'crop': IntersectAOI(config=config, io=io_manager),
-        'nci': NCI(config=config, io=io_manager)
-    }.get(config.execute, KeyError(f'{config.execute} is not a valid module.'))
+        'crop': IntersectAOI,
+        'nci': NCI
+    }.get(config.execute, KeyError(f'{config.execute} is not a valid module.'))(config=config, io=io_manager)
 
     if args.server_execution:
         # This means that we are on the server, and we want to execute on the server
-        module.run_on_server()
+        print(' -- Server execution -- ')
+
+        # Execute module
+        module.run(on_the_server=True)
 
         # Copy the records from server to local
         io_manager.update_records_on_local()
@@ -54,12 +57,14 @@ if __name__ == "__main__":
 
         if config.execution_where == 'local':
             # This means that we are on the local machine, and we want to execute locally
+            print(' -- Local execution -- ')
 
             module.run()
             io_manager.close_connection()
 
         elif config.execution_where == 'server':
             # This means that we are on the local machine, and we want to execute on the server
+            print(' -- Preparing the server execution -- ')
 
             # 1. Upload the config.yaml file to the server
             io_manager.upload_config()
@@ -69,12 +74,10 @@ if __name__ == "__main__":
             io_manager.upload_operations()
 
             # 4. Execute the module
-            # TODO: use the 'nice' command to manage cpu usage and priority
-
             command = f"""
+            cd {io_manager.config.server_repo_root};
             git pull;
-            conda activate wp4_env;
-            nice -n 10 python {io_manager.config.server_repo_root}/src/main.py --server_execution'
+            nice -n 10 {io_manager.config.server_python_executable} {io_manager.config.server_repo_root}/src/main.py --server_execution;
             """
             io_manager.run_command(command)
 

@@ -94,7 +94,9 @@ class IO:
         # Check for errors
         err = stderr.readlines()
         if err:
-            raise Exception(f'Error: {err[0]}')
+            err_message = "\n----- ERROR MESSAGE FROM SERVER CONSOLE -----\n" + \
+                          '\n'.join(err) + "\n----- END OF ERROR MESSAGE -----\n\n"
+            raise Exception(f'Error: {err_message}')
 
         return stdout.readlines()
 
@@ -234,7 +236,7 @@ class IO:
         """
         rel_dir = ("wp3/sentinel2_L2A" if image_type == 'raw' else f"wp4/{image_type}") + \
                   f"/{tile_ref.year}/{tile_ref.tile}"
-        if tile_ref.product == 'NDVI_raw' or image_type != 'raw':
+        if tile_ref.product in ['NDVI_raw', 'NDVI_reconstructed'] or image_type != 'raw':
             rel_dir += f'/{tile_ref.product}'
         else:
             # Only raw non-NDVI files are stored in a tmp folder
@@ -441,6 +443,8 @@ class IO:
         """
         Upload the config.yaml and io_config.yaml files to the server. Always replace the existing ones.
         """
+        print('Uploading config.yaml and io_config.yaml to server.')
+
         sftp = self._ssh_client.open_sftp()
 
         # 1. copy io_config.yaml to server
@@ -462,6 +466,8 @@ class IO:
         Upload the inventory and aoi files to the server if they are not there. On the server, they are located in
         newstorage2/wp4/inventory. We do not copy the whole inventory folder, only the three needed files.
         """
+        print('Uploading inventory and aoi files to server.')
+
         sftp = self._ssh_client.open_sftp()
 
         self.check_existence_on_server(f'{self._config.base_server_dir}/wp4/inventory', dir=True)
@@ -491,6 +497,8 @@ class IO:
         Overwrite the operations folder in the server with the local one. The operations folder is located in
         newstorage2/wp4/operation_records. We copy the whole folder.
         """
+        print('Uploading operations folder to server.')
+
         sftp = self._ssh_client.open_sftp()
 
         local_operations_path = f'{self._config.base_local_dir}/operation_records'
@@ -503,6 +511,21 @@ class IO:
         # For each of the files, do sftp.put to the server with the same file name
         for file in local_operations_files:
             sftp.put(f'{local_operations_path}/{file}', f'{server_operations_path}/{file}')
+
+        sftp.close()
+
+    def update_records_on_local(self):
+        """
+        Update the records file on the local machine with the one on the server.
+        """
+        print('Updating records file on local machine.')
+
+        sftp = self._ssh_client.open_sftp()
+
+        local_records_path = f'{self._config.records_path}'
+        server_records_path = f'{self._config.base_server_dir}/wp4/operation_records/records.csv'
+        self.check_existence_on_server(server_records_path, dir=False)
+        sftp.get(server_records_path, local_records_path)
 
         sftp.close()
 

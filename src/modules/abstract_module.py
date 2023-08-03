@@ -13,9 +13,11 @@ class Module:
         self._time_limit = self._config.time_limit
 
     @abstractmethod
-    def run(self):
-        pass
+    def run(self, on_the_server: bool = False) -> None:
+        """
+        Runs the module.
 
-    @abstractmethod
-    def run_on_server(self):
+        Args:
+            on_the_server (bool): if True, the module is being executed on the server.
+        """
         pass

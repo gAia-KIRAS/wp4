@@ -60,7 +60,7 @@ class IntersectAOI(Module):
         gdf = gpd.read_file(filepath)
         return gdf
 
-    def intersect(self, image: ImageRef) -> Union[ImageRef, None]:
+    def intersect(self, image: ImageRef, on_the_server: bool = False) -> Union[ImageRef, None]:
         """
         Intersects a local .tif file referenced by image (ImageRef) with the Area of Interest AOI.
         Saves the result locally in a new .tif file with the following name:
@@ -68,6 +68,7 @@ class IntersectAOI(Module):
 
         Args:
             image: ImageRef object with the image to intersect. Needs to have the attribute type set.
+            on_the_server: If True, the intersection is done on the server. Otherwise, it is done locally.
 
         Returns:
             clip_image_ref (ImageRef | None): If the intersection was successful, returns an ImageRef
@@ -75,8 +76,13 @@ class IntersectAOI(Module):
              raster does not have a valid SRS), returns None.
         """
         print(f'Intersecting image {image} with the AOI.')
-        local_dir = f'{self._io.config.base_local_dir}/{image.rel_dir()}'
-        filepath = f'{self._io.config.base_local_dir}/{image.rel_filepath()}'
+
+        if on_the_server:
+            local_dir = f'{self._io.build_remote_dir_for_image(image)}'
+            filepath = f'{local_dir}/{image.filename}'
+        else:
+            local_dir = f'{self._io.config.base_local_dir}/{image.rel_dir()}'
+            filepath = f'{self._io.config.base_local_dir}/{image.rel_filepath()}'
 
         # Check existance of the file and the directory
         self._io.check_existence_on_local(local_dir, dir=True)
@@ -84,13 +90,19 @@ class IntersectAOI(Module):
 
         rename_product = {
             'NDVI_raw': 'NDVIraw',
+            'NDVI_reconstructed': 'NDVIrec',
         }
 
         clip_filename = f'crop_{rename_product.get(image.product, image.product)}_{image.year}_' \
                         f'{image.tile}_{image.extract_date()}.tif'
         clip_image_ref = ImageRef(clip_filename, tile_ref=image.tile_ref, type='crop')
-        clip_dir = f'{self._io.config.base_local_dir}/{clip_image_ref.rel_dir()}'
-        clip_filepath = f'{self._io.config.base_local_dir}/{clip_image_ref.rel_filepath()}'
+
+        if on_the_server:
+            clip_dir = self._io.build_remote_dir_for_image(clip_image_ref)
+            clip_filepath = f'{clip_dir}/{clip_image_ref.filename}'
+        else:
+            clip_dir = f'{self._io.config.base_local_dir}/{clip_image_ref.rel_dir()}'
+            clip_filepath = f'{self._io.config.base_local_dir}/{clip_image_ref.rel_filepath()}'
 
         # Check directory where will be saved exists
         self._io.check_existence_on_local(clip_dir, dir=True)
@@ -121,7 +133,7 @@ class IntersectAOI(Module):
         )
         return clip_image_ref
 
-    def run(self):
+    def run(self, on_the_server: bool = False) -> None:
         """
         Intersect all images of all TileRefs (year + product + tile) with the Area of Interest (AOI).
         1. Create a list of all the images that still have to be intersected. List is filtered according to config.
@@ -133,6 +145,9 @@ class IntersectAOI(Module):
             - Deletes both the RAW and CROP images locally
             - Add image to the records
         3. Save the records to a CSV file
+
+        Args:
+            on_the_server: If True, the intersection is done on the server. Otherwise, it is done locally.
         """
         images_df = self._io.filter_all_images(image_type='raw', filters=self._config.filters)
 
@@ -160,25 +175,31 @@ class IntersectAOI(Module):
                   f'Time elapsed: {round((time.time() - start_time) / 60, 2)} minutes. --')
             image_ref = image_refs[i]
 
-            # Download the image (if not available locally, handled by IO)
-            self._io.download_file(image_ref)
+            if not on_the_server:
+                # Download the image (if not available locally, handled by IO)
+                self._io.download_file(image_ref)
 
             # Crop and save locally
-            crop_image_ref = self.intersect(image_ref)
+            crop_image_ref = self.intersect(image_ref, on_the_server=on_the_server)
 
-            # Delete raw image locally
-            self._io.delete_local_file(image_ref)
+            if not on_the_server:
+                # Delete raw image locally
+                self._io.delete_local_file(image_ref)
+
+            # Record unsuccessful intersection
             if crop_image_ref is None:
                 record = ['raw', 'crop', image_ref.tile, image_ref.year,
                           image_ref.product, timestamp(), image_ref.filename, None, 0]
                 self._records.loc[len(self._records)] = record
                 continue
 
-            # Upload the cropped image to the server
-            self._io.upload_file(crop_image_ref)
+            if not on_the_server:
 
-            # Delete cropped image locally
-            self._io.delete_local_file(crop_image_ref)
+                # Upload the cropped image to the server
+                self._io.upload_file(crop_image_ref)
+
+                # Delete cropped image locally
+                self._io.delete_local_file(crop_image_ref)
 
             # Add image to the records
             record = ['raw', 'crop', image_ref.tile, image_ref.year, image_ref.product, timestamp(),
@@ -196,6 +217,3 @@ class IntersectAOI(Module):
                                self._records['timestamp'].between(start_timestamp, timestamp())])
 
         print(f'Unsuccessful intersections: {unsuccessful}')
-
-    def run_on_server(self):
-        pass
