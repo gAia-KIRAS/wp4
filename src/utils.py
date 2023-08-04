@@ -92,10 +92,11 @@ class ImageRef:
         """
         Extract date from the filepath.
         """
-        # TODO: extract date for reconstructed NDVI. They are type == 'raw' but have a different format
         if self.type is None:
             raise Exception('Type of image not set. Date cannot be extracted.')
-        if self.type == 'raw':
+        if self.type == 'raw' and self.product == 'NDVI_reconstructed':
+            date = self.filename.split('_')[2]
+        elif self.type == 'raw':
             date = self.filename.split('_')[7]
         elif self.type in ['crop', 'nci']:
             date = self.filename.split('_')[-1].split('.')[0]

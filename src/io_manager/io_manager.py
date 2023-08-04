@@ -94,9 +94,11 @@ class IO:
         # Check for errors
         err = stderr.readlines()
         if err:
+            other_print = '\n'.join(stdout.readlines())
             err_message = "\n----- ERROR MESSAGE FROM SERVER CONSOLE -----\n" + \
                           '\n'.join(err) + "\n----- END OF ERROR MESSAGE -----\n\n"
-            raise Exception(f'Error: {err_message}')
+            raise Exception(f'After the following lines were printed {other_print}'
+                            f'the following error occurred: {err_message}')
 
         return stdout.readlines()
 
