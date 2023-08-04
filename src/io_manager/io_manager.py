@@ -78,12 +78,13 @@ class IO:
             if stdout.readlines()[0].strip() == 'False':
                 raise FileNotFoundError(f'File {remote_path} does not exist.')
 
-    def run_command(self, command: str):
+    def run_command(self, command: str, raise_exception: bool = True) -> List[str]:
         """
         Run a command on the remote server.
 
         Args:
             command: string with the command to run
+            raise_exception: boolean indicating whether to raise an exception if the command fails
 
         Returns:
             stdout.readlines() (list): list of strings with the output of the command
@@ -94,12 +95,15 @@ class IO:
         # Check for errors
         err = stderr.readlines()
         if err:
-            other_print = '\n'.join(stdout.readlines())
+            out_message = "\n----- OUTPUT MESSAGE FROM SERVER CONSOLE -----\n" + \
+                          '\n'.join(stdout.readlines()) + "\n----- END OF OUTPUT MESSAGE -----\n\n"
             err_message = "\n----- ERROR MESSAGE FROM SERVER CONSOLE -----\n" + \
                           '\n'.join(err) + "\n----- END OF ERROR MESSAGE -----\n\n"
-            raise Exception(f'After the following lines were printed {other_print}'
-                            f'the following error occurred: {err_message}')
-
+            if raise_exception:
+                raise Exception(f'After the following lines were printed {out_message}'
+                                f'the following error occurred: {err_message}')
+            else:
+                warnings.warn(f'The following error occurred: {err_message}')
         return stdout.readlines()
 
     def list_files_on_server(self, tile_ref: TileRef, image_type='raw') -> Tuple[List[ImageRef], pd.DataFrame]:
@@ -487,23 +491,19 @@ class IO:
 
         self.check_existence_on_server(f'{self._config.base_server_dir}/wp4/inventory', dir=True)
         server_path_inventory = f'{self._config.base_server_dir}/wp4/{self._config.inventory_rel_path}'
-        server_path_aoi_shp = f'{self._config.base_server_dir}/wp4/{self._config.aoi_rel_path["shp"]}'
-        server_path_aoi_gpkg = f'{self._config.base_server_dir}/wp4/{self._config.aoi_rel_path["gpkg"]}'
 
         try:
             self.check_existence_on_server(server_path_inventory, dir=False)
         except FileNotFoundError:
             sftp.put(self._config.inventory_path, server_path_inventory)
 
-        try:
-            self.check_existence_on_server(server_path_aoi_shp, dir=False)
-        except FileNotFoundError:
-            sftp.put(self._config.aoi_path['shp'], server_path_aoi_shp)
-
-        try:
-            self.check_existence_on_server(server_path_aoi_gpkg, dir=False)
-        except FileNotFoundError:
-            sftp.put(self._config.aoi_path['gpkg'], server_path_aoi_gpkg)
+        # for aoi_extension in ['shp', 'shx', 'gpkg', 'dbf', 'prj', 'cpg']:
+        for aoi_extension in ['gpkg', 'shp', 'shx']:
+            server_path = f'{self._config.base_server_dir}/wp4/{self._config.aoi_rel_path[aoi_extension]}'
+            try:
+                self.check_existence_on_server(server_path, dir=False)
+            except FileNotFoundError:
+                sftp.put(self._config.aoi_path[aoi_extension], server_path)
 
         sftp.close()
 
@@ -537,8 +537,8 @@ class IO:
 
         sftp = self._ssh_client.open_sftp()
 
-        local_records_path = f'{self._config.records_path}'
-        server_records_path = f'{self._config.base_server_dir}/wp4/operation_records/records.csv'
+        local_records_path = f'{self._config.records_path_aux}'
+        server_records_path = f'{self._config.records_path}'
         self.check_existence_on_server(server_records_path, dir=False)
         sftp.get(server_records_path, local_records_path)
 

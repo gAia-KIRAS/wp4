@@ -21,17 +21,18 @@ class IOConfig:
         self._base_local_dir = os.path.join(self._root, self._config['paths']['base_local_dir'])
         self._temp_dir = os.path.join(self._base_local_dir, self._config['paths']['temp_dir'])
 
+        self._aoi_extensions = ['shp', 'gpkg', 'shx', 'prj', 'dbf', 'cpg']
+
         self._aoi_rel_path = {
-            "shp": self._config['files']['aoi_shp'],
-            "gpkg": self._config['files']['aoi_gpkg']
+            aoi_ext: self._config['files']["aoi_" + aoi_ext] for aoi_ext in self._aoi_extensions
         }
         self._aoi_path = {
-            "shp": os.path.join(self._base_local_dir, self._aoi_rel_path['shp']),
-            "gpkg": os.path.join(self._base_local_dir, self._aoi_rel_path['gpkg'])
+            aoi_ext: os.path.join(self._base_local_dir, self._aoi_rel_path[aoi_ext]) for aoi_ext in self._aoi_extensions
         }
         self._inventory_rel_path = self._config['files']['inventory']
         self._inventory_path = os.path.join(self._base_local_dir, self._inventory_rel_path)
         self._records_path = os.path.join(self._base_local_dir, self._config['files']['records'])
+        self._records_path_aux = self._records_path
         self._all_images_path = {
             image_type: os.path.join(self._base_local_dir, image_type_path)
             for image_type, image_type_path in self._config['files']['all_images'].items()
@@ -104,6 +105,10 @@ class IOConfig:
     @property
     def records_path(self) -> str:
         return self._records_path
+
+    @property
+    def records_path_aux(self) -> str:
+        return self._records_path_aux
 
     @property
     def all_images_path(self) -> dict:

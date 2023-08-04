@@ -76,10 +76,10 @@ if __name__ == "__main__":
             # 4. Execute the module
             command = f"""
             cd {io_manager.config.server_repo_root};
-            git pull;
             nice -n 10 {io_manager.config.server_python_executable} {io_manager.config.server_repo_root}/src/main.py --server_execution;
             """
-            out = io_manager.run_command(command)
+            print(' -- Server execution started -- ')
+            out = io_manager.run_command(command, raise_exception=False)
             print(out)
             print(' -- Server execution finished -- ')
 
