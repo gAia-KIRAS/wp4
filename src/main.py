@@ -73,6 +73,7 @@ if __name__ == "__main__":
 
             print(' -- Server execution information -- ')
             print(f'Executing module: {config.execute}')
+            print(f'Filters: {config.filters}')
             print(f'Runtime limit: {config.time_limit} minutes')
             print(f'Execution started at: {datetime.now()}')
             print(f'Expected to finish before: {datetime.now() + timedelta(minutes=config.time_limit)}')
@@ -80,12 +81,11 @@ if __name__ == "__main__":
             # 4. Execute the module
             command = f"""
             cd {io_manager.config.server_repo_root};
-            nice -n 10 {io_manager.config.server_python_executable} 
-            {io_manager.config.server_repo_root}/src/main.py --server_execution;
+            nice -n 10 {io_manager.config.server_python_executable} {io_manager.config.server_repo_root}/src/main.py --server_execution;
             """
             print(' -- Server execution started -- ')
             out = io_manager.run_command(command, raise_exception=False)
-            print(out)
+            print(*out, sep='\n')
             print(' -- Server execution finished -- ')
 
             # Copy the records from server to local
