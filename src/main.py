@@ -51,9 +51,6 @@ if __name__ == "__main__":
         # Execute module
         module.run(on_the_server=True)
 
-        # Copy the records from server to local
-        io_manager.update_records_on_local()
-
     else:
 
         if config.execution_where == 'local':
@@ -74,6 +71,7 @@ if __name__ == "__main__":
             # 3. Upload the operations data to the server
             io_manager.upload_operations()
 
+            print(' -- Server execution information -- ')
             print(f'Executing module: {config.execute}')
             print(f'Runtime limit: {config.time_limit} minutes')
             print(f'Execution started at: {datetime.now()}')
@@ -82,12 +80,16 @@ if __name__ == "__main__":
             # 4. Execute the module
             command = f"""
             cd {io_manager.config.server_repo_root};
-            nice -n 10 {io_manager.config.server_python_executable} {io_manager.config.server_repo_root}/src/main.py --server_execution;
+            nice -n 10 {io_manager.config.server_python_executable} 
+            {io_manager.config.server_repo_root}/src/main.py --server_execution;
             """
             print(' -- Server execution started -- ')
             out = io_manager.run_command(command, raise_exception=False)
             print(out)
             print(' -- Server execution finished -- ')
+
+            # Copy the records from server to local
+            io_manager.update_records_on_local()
 
     if config.profiling_active:
         profiler.stop()
