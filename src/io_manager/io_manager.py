@@ -540,6 +540,7 @@ class IO:
         local_records_path = f'{self._config.records_path_aux}'
         server_records_path = f'{self._config.records_path}'
         self.check_existence_on_server(server_records_path, dir=False)
+        print(f'Copying {server_records_path} to {local_records_path}')
         sftp.get(server_records_path, local_records_path)
 
         sftp.close()

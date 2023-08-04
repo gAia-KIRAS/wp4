@@ -1,4 +1,5 @@
 from pyinstrument import Profiler
+from datetime import datetime, timedelta
 import argparse
 
 from config.config import Config
@@ -72,6 +73,11 @@ if __name__ == "__main__":
             io_manager.upload_inventory()
             # 3. Upload the operations data to the server
             io_manager.upload_operations()
+
+            print(f'Executing module: {config.execute}')
+            print(f'Runtime limit: {config.time_limit} minutes')
+            print(f'Execution started at: {datetime.now()}')
+            print(f'Expected to finish before: {datetime.now() + timedelta(minutes=config.time_limit)}')
 
             # 4. Execute the module
             command = f"""
