@@ -10,3 +10,7 @@ io_config.yaml
 *.dbf
 *.prj
 *.cpg
+/.idea/misc.xml
+/.idea/inspectionProfiles/profiles_settings.xml
+/.idea/vcs.xml
+/.idea/wp4.iml
