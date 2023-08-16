@@ -188,7 +188,7 @@ class IO:
             df['y_f'] = np.NAN
             df['base_product_f'] = np.NAN
 
-            product_map = {'NDVIraw': 'NDVI_raw'}
+            product_map = {'NDVIraw': 'NDVI_raw', 'NDVIrec': 'NDVI_reconstructed'}
             df['product_f'] = df[1].map(lambda x: product_map.get(x, x))
 
             df.drop(columns=list(range(5)), inplace=True)
