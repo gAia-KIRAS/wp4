@@ -8,7 +8,7 @@ from osgeo import gdal
 from config.config import Config
 from io_manager.io_manager import IO
 from modules.abstract_module import Module
-from utils import ImageRef, timestamp, RECORDS_FILE_COLUMNS
+from utils import ImageRef, timestamp, RECORDS_FILE_COLUMNS, rename_product
 from typing import Union
 
 
@@ -62,8 +62,8 @@ class IntersectAOI(Module):
 
     def intersect(self, image: ImageRef, on_the_server: bool = False) -> Union[ImageRef, None]:
         """
-        Intersects a local .tif file referenced by image (ImageRef) with the Area of Interest AOI.
-        Saves the result locally in a new .tif file with the following name:
+        Intersects a .tif file referenced by image (ImageRef) with the Area of Interest AOI.
+        Saves the result in a new .tif file with the following name:
         - 'crop_{image.product}_{image.year}_{image.tile}_{image.date}.tif'
 
         Args:
@@ -84,14 +84,9 @@ class IntersectAOI(Module):
             local_dir = f'{self._io.config.base_local_dir}/{image.rel_dir()}'
             filepath = f'{self._io.config.base_local_dir}/{image.rel_filepath()}'
 
-        # Check existance of the file and the directory
+        # Check existence of the file and the directory
         self._io.check_existence_on_local(local_dir, dir=True)
         self._io.check_existence_on_local(filepath, dir=False)
-
-        rename_product = {
-            'NDVI_raw': 'NDVIraw',
-            'NDVI_reconstructed': 'NDVIrec',
-        }
 
         clip_filename = f'crop_{rename_product.get(image.product, image.product)}_{image.year}_' \
                         f'{image.tile}_{image.extract_date()}.tif'

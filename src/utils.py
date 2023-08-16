@@ -133,3 +133,9 @@ def timestamp() -> str:
     Return a timestamp in the format YYYYMMDD_HHMMSS.
     """
     return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+rename_product = {
+    'NDVI_raw': 'NDVIraw',
+    'NDVI_reconstructed': 'NDVIrec',
+}

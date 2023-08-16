@@ -9,7 +9,7 @@ from config.config import Config
 from config.io_config import IOConfig
 from io_manager.io_manager import IO
 from modules.abstract_module import Module
-from utils import ImageRef, TileRef, timestamp, RECORDS_FILE_COLUMNS, FakeTFTypeHints
+from utils import ImageRef, TileRef, timestamp, RECORDS_FILE_COLUMNS, FakeTFTypeHints, rename_product
 
 try:
     import tensorflow as tf
@@ -43,6 +43,12 @@ class NCI(Module):
         self._n_size = value
 
     def run(self, on_the_server: bool = False) -> None:
+        """
+        TODO: docstring
+
+        Args:
+            on_the_server (bool, optional): If True, the computation is done on the server. Defaults to False.
+        """
         images_df = self._io.filter_all_images(image_type='crop', filters=self._config.filters)
 
         # Get all images that still have no computed NCI
@@ -69,21 +75,23 @@ class NCI(Module):
             image_1 = image_refs[i]
             image_2 = image_refs[i + 1]
 
-            # Download images (if not already downloaded)
-            self._io.download_file(image_1)
-            self._io.download_file(image_2)
+            if not on_the_server:
+                # Download images (if not already downloaded)
+                self._io.download_file(image_1)
+                self._io.download_file(image_2)
 
             # NCI computed locally
-            nci_image = self.compute_and_save_nci(image_1, image_2)
+            nci_image = self.compute_and_save_nci(image_1, image_2, on_the_server=on_the_server)
 
-            # Delete first image from local machine. Second image will be used for the next iteration
-            self._io.delete_local_file(image_1)
+            if not on_the_server:
+                # Delete first image from local machine. Second image will be used for the next iteration
+                self._io.delete_local_file(image_1)
 
-            # Upload NCI to server
-            self._io.upload_file(nci_image)
+                # Upload NCI to server
+                self._io.upload_file(nci_image)
 
-            # Delete image from local machine
-            self._io.delete_local_file(nci_image)
+                # Delete image from local machine
+                self._io.delete_local_file(nci_image)
 
             # Update records
             record = ['crop', 'nci', image_1.tile, image_1.year, image_1.product, timestamp(),
@@ -94,7 +102,7 @@ class NCI(Module):
             i += 1
 
         # Delete image_2 from local machine
-        if i > 0:
+        if i > 0 and not on_the_server:
             self._io.delete_local_file(image_2)
 
         print(f'\nEnd of process. Time elapsed: {round((time.time() - start_time) / 60, 2)} minutes.')
@@ -106,34 +114,37 @@ class NCI(Module):
 
         print(f'Unsuccessful computations: {unsuccessful}')
 
-    def build_and_check_paths(self, image_1: ImageRef, image_2: ImageRef) -> (str, str):
+    def build_and_check_paths(self, image_1: ImageRef, image_2: ImageRef, on_the_server: bool = False) -> (str, str):
         """
         Checks if the paths to the images exist on the local machine. If not, raises an error.
 
         Args:
             image_1: ImageRef object with the first image
             image_2: ImageRef object with the second image
+            on_the_server (bool, optional): If True, the computation is done on the server. Defaults to False.
 
         Returns:
             path_1: string with the filepath to the first image
             path_2: string with the filepath to the second image
         """
-        self._io.check_inputs_with_metadata(image_1.tile_ref)
-        self._io.check_inputs_with_metadata(image_2.tile_ref)
+        if on_the_server:
+            dir_1 = f'{self._io.build_remote_dir_for_image(image_1)}'
+            dir_2 = f'{self._io.build_remote_dir_for_image(image_2)}'
+            filepath_1 = f'{dir_1}/{image_1.filename}'
+            filepath_2 = f'{dir_2}/{image_2.filename}'
+        else:
+            dir_1 = f'{self._io.config.base_local_dir}/{image_1.rel_dir()}'
+            dir_2 = f'{self._io.config.base_local_dir}/{image_2.rel_dir()}'
+            filepath_1 = f'{dir_1}/{image_1.filename}'
+            filepath_2 = f'{dir_2}/{image_2.filename}'
 
-        dir_1 = f'{self._io.config.base_local_dir}/{image_1.rel_dir()}'
-        dir_2 = f'{self._io.config.base_local_dir}/{image_2.rel_dir()}'
-        self._io.check_existence_on_local(dir_1, dir=True)
-        self._io.check_existence_on_local(dir_2, dir=True)
-
-        filepath_1 = f'{dir_1}/{image_1.filename}'
-        filepath_2 = f'{dir_2}/{image_2.filename}'
         self._io.check_existence_on_local(filepath_1, dir=False)
         self._io.check_existence_on_local(filepath_2, dir=False)
 
         return filepath_1, filepath_2
 
-    def save_nci(self, nci: tf.Tensor | torch.Tensor, image: ImageRef, srs: str) -> ImageRef:
+    def save_nci(self, nci: tf.Tensor | torch.Tensor, image: ImageRef, srs: str, on_the_server: bool = False) \
+            -> ImageRef:
         """
         Saves the NCI locally. The NCI is saved according to the following rules:
         - saved as a .tif file. Therefore, when loaded, it is an image with 3 channels
@@ -146,19 +157,24 @@ class NCI(Module):
             nci: tf or torch Tensor with the NCI to save. Shape: (4, image.height, image.width)
             image: ImageRef object for the first image in the pair
             srs: string with the spatial reference system of the image
+            on_the_server (bool, optional): If True, the computation is done on the server. Defaults to False.
 
         Returns:
             image: ImageRef object with the new saved image
         """
-        # Check if the directory exists. If not, the IO method already creates it
-        dir = f'{self._io.config.base_local_dir}/nci/{image.tile_ref.to_subpath()}'
-        self._io.check_existence_on_local(dir, dir=True)
+        # Build paths to save the NCI
+        if on_the_server:
+            save_dir = self._io.build_remote_dir_for_image(image)
+        else:
+            save_dir = f'{self._io.config.base_local_dir}/nci/{image.tile_ref.to_subpath()}'
 
-        filename_aux = f"nci{self._n_size}_{image.product}_{image.year}_{image.tile}_{image.extract_date()}_aux.tif"
-        filepath_aux = f'{dir}/{filename_aux}'
+        self._io.check_existence_on_local(save_dir, dir=True)
 
-        filename = f'nci{self._n_size}_{image.product}_{image.year}_{image.tile}_{image.extract_date()}.tif'
-        filepath = f'{dir}/{filename}'
+        filename = f'nci{self._n_size}_{rename_product.get(image.product, image.product)}_' \
+                   f'{image.year}_{image.tile}_{image.extract_date()}.tif'
+        filename_aux = filename.replace('.tif', '_aux.tif')
+        filepath = f'{save_dir}/{filename}'
+        filepath_aux = f'{save_dir}/{filename_aux}'
 
         # Check if image already exists. If so, overwrite it
         try:
@@ -190,18 +206,19 @@ class NCI(Module):
 
         return ImageRef(filename, tile_ref=image.tile_ref, type='nci')
 
-    def compute_and_save_nci(self, image_1: ImageRef, image_2: ImageRef) -> ImageRef:
+    def compute_and_save_nci(self, image_1: ImageRef, image_2: ImageRef, on_the_server: bool = False) -> ImageRef:
         """
         Computes and saves the NCI between two images. See more details about the computation in compute_nci method.
 
         Args:
             image_1: ImageRef object with the first image
             image_2: ImageRef object with the second image
+            on_the_server: If True, the module is being run on the server, otherwise locally
 
         Returns:
             image_ref: ImageRef object referencing the new saved NCI image
         """
-        filepath_1, filepath_2 = self.build_and_check_paths(image_1, image_2)
+        filepath_1, filepath_2 = self.build_and_check_paths(image_1, image_2, on_the_server=on_the_server)
 
         # Both are locally available, we can compute the NCI
         r_1 = gdal.Open(filepath_1).ReadAsArray()
@@ -219,7 +236,7 @@ class NCI(Module):
             raise ValueError(f'Convolution library {self._conv_lib} not recognized')
 
         # Save the NCI
-        new_image = self.save_nci(nci_result, image_1, srs)
+        new_image = self.save_nci(nci_result, image_1, srs, on_the_server=on_the_server)
 
         return new_image
 
@@ -354,7 +371,7 @@ class NCI(Module):
 
     @staticmethod
     def apply_convolutions_torch(raster, filter_size, filter_values=None):
-        filter = torch.ones((1, 1, filter_size, filter_size), dtype=torch.float32)
+        filter = torch.ones((1, 1, filter_size, filter_size))
         if filter_values is not None:
             filter = filter.multiply(filter_values)
 
@@ -374,12 +391,10 @@ if __name__ == '__main__':
     io = IO(io_config)
     nci = NCI(config, io)
 
-    tile_ref = TileRef(2020, '33TUM', 'NDVI_raw')
-    image_refs, _ = io.list_files_on_server(tile_ref, image_type='crop')
+    tile_ref = TileRef(2020, '33TUM', 'NDVI_reconstructed')
+    image_refs, _ = io.list_files_on_server(tile_ref, image_type='raw')
     image_1 = image_refs[0]
-    image_1.type = 'crop'
     image_2 = image_refs[1]
-    image_2.type = 'crop'
 
     io.download_file(image_1)
     io.download_file(image_2)
