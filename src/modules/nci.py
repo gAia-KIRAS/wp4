@@ -59,7 +59,7 @@ class NCI(Module):
         images_df = images_df.merge(nci_done, how='left', on=['year', 'tile', 'product', 'filename'], indicator=True)
         to_compute = images_df.loc[images_df['_merge'] == 'left_only',
         ['year', 'tile', 'product', 'filename']].sort_values(by=['year', 'tile', 'product', 'filename'])
-        image_refs = [ImageRef(row.filename, row.year, row.tile, row.product, type='crop')
+        image_refs = [ImageRef(row.filename, row.year, row.tile, row.product, type='raw')
                       for row in to_compute.itertuples()]
 
         print(f'Filters: {self._config.filters}')
