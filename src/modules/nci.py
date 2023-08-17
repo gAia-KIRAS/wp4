@@ -162,17 +162,19 @@ class NCI(Module):
         Returns:
             image: ImageRef object with the new saved image
         """
+        filename = f'nci{self._n_size}_{rename_product.get(image.product, image.product)}_' \
+                   f'{image.year}_{image.tile}_{image.extract_date()}.tif'
+        filename_aux = filename.replace('.tif', '_aux.tif')
+        return_image_ref = ImageRef(filename, tile_ref=image.tile_ref, type='nci')
+
         # Build paths to save the NCI
         if on_the_server:
-            save_dir = self._io.build_remote_dir_for_image(image)
+            save_dir = self._io.build_remote_dir_for_image(return_image_ref)
         else:
             save_dir = f'{self._io.config.base_local_dir}/nci/{image.tile_ref.to_subpath()}'
 
         self._io.check_existence_on_local(save_dir, dir=True)
 
-        filename = f'nci{self._n_size}_{rename_product.get(image.product, image.product)}_' \
-                   f'{image.year}_{image.tile}_{image.extract_date()}.tif'
-        filename_aux = filename.replace('.tif', '_aux.tif')
         filepath = f'{save_dir}/{filename}'
         filepath_aux = f'{save_dir}/{filename_aux}'
 
@@ -204,7 +206,7 @@ class NCI(Module):
         # Delete the auxiliary file
         self._io.delete_local_file(ImageRef(filename_aux, tile_ref=image.tile_ref, type='nci'))
 
-        return ImageRef(filename, tile_ref=image.tile_ref, type='nci')
+        return return_image_ref
 
     def compute_and_save_nci(self, image_1: ImageRef, image_2: ImageRef, on_the_server: bool = False) -> ImageRef:
         """
