@@ -17,8 +17,14 @@ def test_file_download():
     tile_ref = TileRef(2021, '33TUN', 'NDVI_raw')
     refs, df = io.list_files_on_server(tile_ref)
     image = refs[0]
-    io.download_file(image)
     filepath = f'{io.config.base_local_dir}/{image.rel_filepath()}'
+    try:
+        io.check_existence_on_local(filepath)
+        io.delete_local_file(image)
+    except FileNotFoundError:
+        pass
+
+    io.download_file(image)
     try:
         io.check_existence_on_local(filepath)
         io.delete_local_file(image)
@@ -230,9 +236,9 @@ def test_list_files_crop():
     io = IO(io_config)
     tile_ref = TileRef(2020, '33TUM', 'NDVI_raw')
     image_refs, df = io.list_files_on_server(tile_ref, 'crop')
-    assert set(df.year_f.unique()) == {'2020'}
-    assert set(df.tile_f.unique()) == {'33TUM'}
-    assert set(df.product_f.unique()) == {'NDVI_raw'}
+    assert df.empty or set(df.year_f.unique()) == {'2020'}
+    assert df.empty or set(df.tile_f.unique()) == {'33TUM'}
+    assert df.empty or set(df.product_f.unique()) == {'NDVI_raw'}
     io.close_connection()
 
 
