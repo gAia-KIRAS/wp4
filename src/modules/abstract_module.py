@@ -1,7 +1,7 @@
 from abc import abstractmethod
 
 from config.config import Config
-from io_manager.io_manager import IO
+from io_manager import IO
 
 
 class Module:
