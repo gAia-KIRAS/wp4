@@ -383,20 +383,3 @@ class NCI(Module):
             padding='same'
         )
         return torch.squeeze(output)
-
-
-if __name__ == '__main__':
-    config = Config()
-    io_config = IOConfig()
-    io = IO(io_config)
-    nci = NCI(config, io)
-
-    tile_ref = TileRef(2020, '33TUM', 'NDVI_reconstructed')
-    image_refs, _ = io.list_files_on_server(tile_ref, image_type='raw')
-    image_1 = image_refs[0]
-    image_2 = image_refs[1]
-
-    io.download_file(image_1)
-    io.download_file(image_2)
-
-    result = nci.compute_and_save_nci(image_1, image_2)
