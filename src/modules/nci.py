@@ -44,7 +44,16 @@ class NCI(Module):
 
     def run(self, on_the_server: bool = False) -> None:
         """
-        TODO: docstring
+        Compute NCI and avg vs neigh for images of all TileRefs (year + product + tile)
+        1. Create a list of all the images that still have to be intersected. List is filtered according to config.
+        2. For each pair of consecutive images (if time_limit is not over):
+            - Downloads the RAW images from the server if it's not available locally
+            - Calculate the NCI between the two images and save it
+            - Delete the first image locally
+            - Uploads the NCI image to the server
+            - Deletes both the NCI and first image locally
+            - Add image to the records
+        3. Save the records to a CSV file
 
         Args:
             on_the_server (bool, optional): If True, the computation is done on the server. Defaults to False.
@@ -94,7 +103,7 @@ class NCI(Module):
                 self._io.delete_local_file(nci_image)
 
             # Update records
-            record = ['crop', 'nci', image_1.tile, image_1.year, image_1.product, timestamp(),
+            record = ['raw', 'nci', image_1.tile, image_1.year, image_1.product, timestamp(),
                       image_1.filename, nci_image.filename, 1]
             record_df = pd.DataFrame({k: [v] for (k, v) in zip(RECORDS_FILE_COLUMNS, record)})
             self._records = pd.concat([self._records, record_df], ignore_index=True)
