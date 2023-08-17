@@ -49,11 +49,11 @@ class NCI(Module):
         Args:
             on_the_server (bool, optional): If True, the computation is done on the server. Defaults to False.
         """
-        images_df = self._io.filter_all_images(image_type='crop', filters=self._config.filters)
+        images_df = self._io.filter_all_images(image_type='raw', filters=self._config.filters)
 
         # Get all images that still have no computed NCI
         nci_done = self._records.loc[
-            (self._records['from'] == 'crop') & (self._records['to'] == 'nci'),
+            (self._records['from'] == 'raw') & (self._records['to'] == 'nci'),
             ['year', 'tile', 'product', 'filename_from']
         ].rename(columns={'filename_from': 'filename'})
         images_df = images_df.merge(nci_done, how='left', on=['year', 'tile', 'product', 'filename'], indicator=True)
@@ -257,6 +257,10 @@ class NCI(Module):
         """
         r_1 = torch.from_numpy(r_1)
         r_2 = torch.from_numpy(r_2)
+
+        # Convert type torch.int16 to torch.float32
+        r_1 = r_1.type(torch.float32)
+        r_2 = r_2.type(torch.float32)
 
         # Compute image of means according to filter size, and center the image (substract mean)
         mean_1 = self.apply_convolutions_torch(r_1, self._n_size, filter_values=1 / (self._n_size ** 2))
