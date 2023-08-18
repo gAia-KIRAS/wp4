@@ -9,7 +9,8 @@ from config.config import Config
 from config.io_config import IOConfig
 from io_manager.io_manager import IO
 from modules.abstract_module import Module
-from utils import ImageRef, TileRef, timestamp, RECORDS_FILE_COLUMNS, FakeTFTypeHints, rename_product
+from utils import ImageRef, TileRef, timestamp, RECORDS_FILE_COLUMNS, FakeTFTypeHints, rename_product, RAW_IMAGE_SIZES, \
+    CROP_IMAGE_LIMITS
 
 try:
     import tensorflow as tf
@@ -238,6 +239,10 @@ class NCI(Module):
         # Get SRS from image_1
         srs = gdal.Open(filepath_1).GetProjection()
 
+        # Crop images
+        r_1 = self.crop_image(r_1, image_1)
+        r_2 = self.crop_image(r_2, image_2)
+
         # Compute NCI using the selected library
         if self._conv_lib == 'torch':
             nci_result = self.compute_nci_with_torch(r_1, r_2)
@@ -250,6 +255,21 @@ class NCI(Module):
         new_image = self.save_nci(nci_result, image_1, srs, on_the_server=on_the_server)
 
         return new_image
+
+    @staticmethod
+    def crop_image(raster, image_ref: ImageRef):
+        # Check dimensions
+        assert raster.shape == RAW_IMAGE_SIZES.get(image_ref.tile), \
+            f'Image {image_ref.filename} has wrong dimensions. Expected: {RAW_IMAGE_SIZES.get(image_ref.tile)}'
+
+        # Get dimensions from utils map
+        min_i, max_i, min_j, max_j = CROP_IMAGE_LIMITS.get(image_ref.tile)
+
+        # Crop image
+        raster = raster[min_i:max_i, min_j:max_j]
+
+        return raster
+
 
     def compute_nci_with_torch(self, r_1: np.ndarray, r_2: np.ndarray) -> torch.Tensor:
         """

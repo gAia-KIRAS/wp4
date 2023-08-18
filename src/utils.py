@@ -2,7 +2,30 @@ from dataclasses import dataclass
 from datetime import datetime
 
 RECORDS_FILE_COLUMNS = ['from', 'to', 'tile', 'year', 'product', 'timestamp', 'filename_from', 'filename_to', 'success']
-IMAGE_TYPES = ['raw', 'crop', 'nci','testing']
+IMAGE_TYPES = ['raw', 'crop', 'nci', 'testing']
+RAW_IMAGE_SIZES = {
+    '33TUM': (10980, 10980),
+    '33TUN': (10980, 10980),
+    '33TVM': (10980, 10980),
+    '33TVN': (10980, 10980),
+}
+CROP_IMAGE_LIMITS = {    # (i_min, i_max, j_min, j_max)
+    '33TUM': (0, 3463, 3131, 10980),
+    '33TUN': (10980 - 3207, 10980, 10980 - 8755, 10980),
+    '33TVM': (0, 3910, 0, 10509),
+    '33TVN': (10980 - 2385, 10980, 0, 10223),
+}
+CROP_LIMITS_INSIDE_CROPPED = {  # (i_min, i_max, j_min, j_max)
+    '33TUM': (2229, 5692, 906, 8755),
+    '33TUN': (0, 3207, 0, 8755),
+    '33TVM': (0, 3910, 0, 10509),
+    '33TVN': (822, 3207, 7771, 17994),
+}
+
+assert all([
+    x[1] - x[0] == CROP_LIMITS_INSIDE_CROPPED[tile][1] - CROP_LIMITS_INSIDE_CROPPED[tile][0] and
+    x[3] - x[2] == CROP_LIMITS_INSIDE_CROPPED[tile][3] - CROP_LIMITS_INSIDE_CROPPED[tile][2]
+    for tile, x in CROP_IMAGE_LIMITS.items()]), 'CROP_LIMITS_INSIDE_CROPPED must be consistent with RAW_IMAGE_SIZES'
 
 
 @dataclass

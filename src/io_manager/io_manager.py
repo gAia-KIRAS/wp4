@@ -275,7 +275,6 @@ class IO:
         dir = self.build_remote_dir_for_image(image)
         filepath = f'{dir}/{image.filename}'
         self.check_existence_on_server(dir, dir=True)
-        self.check_existence_on_server(filepath, dir=False)
 
         local_dir = f'{self._config.base_local_dir}/{image.rel_dir()}'
         local_filepath = f'{self._config.base_local_dir}/{image.rel_filepath()}'
@@ -285,6 +284,7 @@ class IO:
             self.check_existence_on_local(local_filepath)
             warnings.warn(f'\nFile {image.filename} already exists on local machine. Will not be downloaded')
         except FileNotFoundError as e:
+            self.check_existence_on_server(filepath, dir=False)
             sftp = self._ssh_client.open_sftp()
             sftp.get(f'{dir}/{image.filename}', local_filepath)
             sftp.close()
