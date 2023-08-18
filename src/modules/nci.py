@@ -286,6 +286,11 @@ class NCI(Module):
             nci: torch .Tensor with the NCI between the two images. Shape: (4, image.height, image.width)
                  The four bands correspond to the correlation r, the intercept a, the slope b, and pix_vs_avg.
         """
+        # Convert type np.uint16 to np.int32
+        r_1 = r_1.astype(np.int32)
+        r_2 = r_2.astype(np.int32)
+
+        # Build tensors
         r_1 = torch.from_numpy(r_1)
         r_2 = torch.from_numpy(r_2)
 
