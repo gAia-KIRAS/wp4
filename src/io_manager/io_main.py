@@ -45,10 +45,35 @@ def list_all_files_and_save():
     io.close_connection()
 
 
+def update_broken_records_for_nci(df):
+    """
+    Update the records with the NCI computations that have already been done.
+    """
+    records = pd.read_csv(io_config.records_path)
+    records = records[(records['from'] != 'raw') | (records['to'] != 'nci')]
+
+    for index, row in df.iterrows():
+        # Change format of string of the date. First convert from string to datetime
+        date = pd.to_datetime(row['date_f'], format='%Y-%m-%d').strftime('%Y%m%d')
+        new_record = {
+            'from': ['raw'],
+            'to': ['nci'],
+            'tile': [row['tile']],
+            'year': [row['year']],
+            'product': [row['product']],
+            'filename_to': [row['filename']],
+            'filename_from': [f'{row["tile"]}_{row["year"]}_{date}_{row["product"]}.tif'],
+            'success': [1]
+        }
+        records = pd.concat([records, pd.DataFrame(new_record)])
+    records.to_csv(io_config.records_path, index=False)
+
+
 if __name__ == '__main__':
-    # io_config = IOConfig()
-    # io = IO(io_config)
+    io_config = IOConfig()
+    io = IO(io_config)
 
-    list_all_files_and_save()
+    df = io.list_all_files_of_type('nci')
+    update_broken_records_for_nci(df)
+
     # check_dates()
-
