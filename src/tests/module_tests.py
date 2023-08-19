@@ -9,6 +9,9 @@ from utils import TileRef
 
 
 def test_nci_for_NDVI_raw():
+    """
+    Test NCI computation for NDVI_raw
+    """
     config = Config()
     io_config = IOConfig()
     io = IO(io_config)
@@ -29,6 +32,9 @@ def test_nci_for_NDVI_raw():
 
 
 def test_nci_for_NDVI_reconstructed():
+    """
+    Test NCI computation for NDVI_reconstructed
+    """
     config = Config()
     io_config = IOConfig()
     io = IO(io_config)
@@ -49,6 +55,9 @@ def test_nci_for_NDVI_reconstructed():
 
 
 def test_intersect_with_aoi():
+    """
+    Test intersection with AOI for NDVI_reconstructed
+    """
     io_config = IOConfig()
     config = Config()
 

@@ -100,10 +100,11 @@ class IO:
             err_message = "\n----- ERROR MESSAGE FROM SERVER CONSOLE -----\n" + \
                           '\n'.join(err) + "\n----- END OF ERROR MESSAGE -----\n\n"
             if raise_exception:
-                raise Exception(f'After the following lines were printed {out_message}'
-                                f'the following error occurred: {err_message}')
+                raise Exception(f'Out message: {out_message}'
+                                f'Error message: {err_message}')
             else:
-                warnings.warn(f'The following error occurred: {err_message}')
+                warnings.warn(f'Out message: {out_message}'
+                              f'Error message: {err_message}')
         return stdout.readlines()
 
     def list_files_on_server(self, tile_ref: TileRef, image_type='raw') -> Tuple[List[ImageRef], pd.DataFrame]:
@@ -546,6 +547,6 @@ class IO:
         sftp.close()
 
     @property
-    def config(self):
+    def config(self) -> IOConfig:
         return self._config
 
