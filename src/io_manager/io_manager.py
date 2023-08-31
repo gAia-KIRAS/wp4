@@ -491,12 +491,6 @@ class IO:
         sftp = self._ssh_client.open_sftp()
 
         self.check_existence_on_server(f'{self._config.base_server_dir}/wp4/inventory', dir=True)
-        server_path_inventory = f'{self._config.base_server_dir}/wp4/{self._config.inventory_rel_path}'
-
-        try:
-            self.check_existence_on_server(server_path_inventory, dir=False)
-        except FileNotFoundError:
-            sftp.put(self._config.inventory_path, server_path_inventory)
 
         # for aoi_extension in ['shp', 'shx', 'gpkg', 'dbf', 'prj', 'cpg']:
         for aoi_extension in ['gpkg', 'shp', 'shx']:
