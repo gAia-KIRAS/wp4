@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Union
 
 RECORDS_FILE_COLUMNS = ['from', 'to', 'tile', 'year', 'product', 'timestamp', 'filename_from', 'filename_to', 'success']
-IMAGE_TYPES = ['raw', 'crop', 'nci', 'testing']
+IMAGE_TYPES = ['raw', 'crop', 'nci', 'testing', 'ground_truth']
 RAW_IMAGE_SIZES = {
     '33TUM': (10980, 10980),
     '33TUN': (10980, 10980),
@@ -22,6 +23,14 @@ CROP_LIMITS_INSIDE_CROPPED = {  # (i_min, i_max, j_min, j_max)
     '33TVN': (822, 3207, 7771, 17994),
 }
 
+# Load the cropped NDVI_raw image
+reference_crop_images = {
+    '33TVM': "crop_NDVIraw_2021_33TVM_20210105.tif",
+    '33TUN': "crop_NDVIraw_2021_33TUN_20210103.tif",
+    '33TUM': "crop_NDVIraw_2021_33TUM_20210105.tif",
+    '33TVN': "crop_NDVIraw_2021_33TVN_20210105.tif",
+}
+
 assert all([
     x[1] - x[0] == CROP_LIMITS_INSIDE_CROPPED[tile][1] - CROP_LIMITS_INSIDE_CROPPED[tile][0] and
     x[3] - x[2] == CROP_LIMITS_INSIDE_CROPPED[tile][3] - CROP_LIMITS_INSIDE_CROPPED[tile][2]
@@ -33,9 +42,9 @@ class TileRef:
     """
     Class to store the reference to a tile. No date is stored.
     """
-    year: int
-    tile: str
-    product: str
+    year: int = None
+    tile: str = None
+    product: str = None
 
     def to_subpath(self):
         return f'{self.year}/{self.tile}/{self.product}'
@@ -59,7 +68,7 @@ class ImageRef:
     """
 
     filename: str
-    year: int = None
+    year: Union[int, None] = None
     tile: str = None
     product: str = None
     type: str = None
@@ -73,8 +82,6 @@ class ImageRef:
             self.tile = self.tile_ref.tile
             self.product = self.tile_ref.product
         else:
-            if not self.year or not self.tile or not self.product:
-                raise Exception('year, tile and product must be set if TileRef is not set.')
             self.tile_ref = TileRef(self.year, self.tile, self.product)
         if self.type and self.type not in IMAGE_TYPES:
             raise Exception(f'Image type {self.type} not supported.')

@@ -48,18 +48,6 @@ class IntersectAOI(Module):
             aoi.to_file(filepath_shp, driver='ESRI Shapefile')
             self._io.check_existence_on_local(filepath_shp, dir=False)
 
-    def read_aoi(self) -> gpd.GeoDataFrame:
-        """
-        Reads the Area of Interest (AOI) from the local file. File format is .gpkg and is saved as a GeoDataFrame.
-
-        Returns:
-            gdf (GeoDataFrame): GeoDataFrame with the AOI
-        """
-        filepath = self._io.config.aoi_path['gpkg']
-        self._io.check_existence_on_local(filepath, dir=False)
-        gdf = gpd.read_file(filepath)
-        return gdf
-
     def intersect(self, image: ImageRef, on_the_server: bool = False) -> Union[ImageRef, None]:
         """
         Intersects a .tif file referenced by image (ImageRef) with the Area of Interest AOI.

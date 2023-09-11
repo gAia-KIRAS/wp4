@@ -34,15 +34,8 @@ def f(tile):
 
     r_1_raw = gdal.Open(f'{io_config.base_local_dir}/{image_1_raw.rel_filepath()}').ReadAsArray()
 
-    # Load the cropped NDVI_raw image
-    filename = {
-        '33TVM': "crop_NDVIraw_2021_33TVM_20210105.tif",
-        '33TUN': "crop_NDVIraw_2021_33TUN_20210103.tif",
-        '33TUM': "crop_NDVIraw_2021_33TUM_20210105.tif",
-        '33TVN': "crop_NDVIraw_2021_33TVN_20210105.tif",
-    }
     image_1_crop = ImageRef(
-        filename=filename[tile],
+        filename=reference_crop_images[tile],
         tile=tile,
         year=2021,
         product='NDVI_raw',

@@ -21,16 +21,25 @@ class IOConfig:
         self._base_local_dir = os.path.join(self._root, self._config['paths']['base_local_dir'])
         self._temp_dir = os.path.join(self._base_local_dir, self._config['paths']['temp_dir'])
 
+        # Build paths for AOI
         self._aoi_extensions = ['shp', 'gpkg', 'shx', 'prj', 'dbf', 'cpg']
-
         self._aoi_rel_path = {
             aoi_ext: self._config['files']["aoi_" + aoi_ext] for aoi_ext in self._aoi_extensions
         }
         self._aoi_path = {
             aoi_ext: os.path.join(self._base_local_dir, self._aoi_rel_path[aoi_ext]) for aoi_ext in self._aoi_extensions
         }
-        self._inventory_rel_path = self._config['files']['inventory']
-        self._inventory_path = os.path.join(self._base_local_dir, self._inventory_rel_path)
+
+        # Build paths for inventory
+        self._inv_extensions = ['shp', 'gpkg']
+        self._inventory_rel_path = {
+            aoi_ext: self._config['files']["inventory_" + aoi_ext] for aoi_ext in self._inv_extensions
+        }
+        self._inventory_path = {
+            aoi_ext: os.path.join(self._base_local_dir, self._inventory_rel_path[aoi_ext])
+            for aoi_ext in self._inv_extensions
+        }
+
         self._records_path = os.path.join(self._base_local_dir, self._config['files']['records'])
         self._records_path_aux = self._records_path
         self._all_images_path = {
@@ -95,11 +104,11 @@ class IOConfig:
         return self._aoi_rel_path
 
     @property
-    def inventory_path(self) -> str:
+    def inventory_path(self) -> Dict[str, str]:
         return self._inventory_path
 
     @property
-    def inventory_rel_path(self) -> str:
+    def inventory_rel_path(self) -> Dict[str, str]:
         return self._inventory_rel_path
 
     @property

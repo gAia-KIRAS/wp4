@@ -297,7 +297,8 @@ class IO:
         Args:
             tile_ref: reference to the tile to check
         """
-        assert tile_ref.year in self._config.available_years, f'Year {tile_ref.year} not available.'
+        if tile_ref.year is not None:
+            assert tile_ref.year in self._config.available_years, f'Year {tile_ref.year} not available.'
         assert tile_ref.tile in self._config.available_tiles, f'Tile {tile_ref.tile} not available.'
         assert tile_ref.product in self._config.available_products, f'Product {tile_ref.product} not available.'
 
@@ -543,4 +544,3 @@ class IO:
     @property
     def config(self) -> IOConfig:
         return self._config
-
