@@ -41,6 +41,8 @@ class IOConfig:
         }
 
         self._records_path = os.path.join(self._base_local_dir, self._config['files']['records'])
+        self._records_cd_path = os.path.join(self._base_local_dir, self._config['files']['records_cd'])
+        self._results_cd_path = os.path.join(self._base_local_dir, self._config['files']['results_cd'])
         self._records_path_aux = self._records_path
         self._all_images_path = {
             image_type: os.path.join(self._base_local_dir, image_type_path)
@@ -114,6 +116,14 @@ class IOConfig:
     @property
     def records_path(self) -> str:
         return self._records_path
+
+    @property
+    def records_cd_path(self) -> str:
+        return self._records_cd_path
+
+    @property
+    def results_cd_path(self) -> str:
+        return self._results_cd_path
 
     @property
     def records_path_aux(self) -> str:

@@ -233,7 +233,6 @@ class NCI(Module):
         filepath_1, filepath_2 = self.build_and_check_paths(image_1, image_2, on_the_server=on_the_server)
 
         # Both are locally available, we can compute the NCI
-        r_1 = gdal.Open(filepath_1).ReadAsArray()
         r_2 = gdal.Open(filepath_2).ReadAsArray()
 
         # Get SRS from image_1

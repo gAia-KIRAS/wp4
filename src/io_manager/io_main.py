@@ -74,6 +74,6 @@ if __name__ == '__main__':
     io = IO(io_config)
 
     df = io.list_all_files_of_type('nci')
-    update_broken_records_for_nci(df)
+    # update_broken_records_for_nci(df)
 
     # check_dates()

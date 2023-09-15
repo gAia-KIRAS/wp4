@@ -4,6 +4,7 @@ import argparse
 
 from config.config import Config
 from modules.build_ground_truth import BuildGroundTruth
+from modules.change_detection import ChangeDetection
 from modules.nci import NCI
 from config.io_config import IOConfig
 from io_manager.io_manager import IO
@@ -44,6 +45,7 @@ if __name__ == "__main__":
         'crop': IntersectAOI,
         'nci': NCI,
         'ground_truth': BuildGroundTruth,
+        'cd': ChangeDetection
     }.get(config.execute, KeyError(f'{config.execute} is not a valid module.'))(config=config, io=io_manager)
 
     if args.server_execution:

@@ -23,6 +23,9 @@ class Config:
         # NCI parameters
         self._nci_conf = self._config['nci']
 
+        # CD parameters
+        self._cd_conf = self._config['cd']
+
     def load_config(self) -> dict:
         with open(self._config_path) as f:
             # use safe_load instead load
@@ -40,6 +43,10 @@ class Config:
     @property
     def nci_conf(self) -> dict:
         return self._nci_conf
+
+    @property
+    def cd_conf(self) -> dict:
+        return self._cd_conf
 
     @property
     def execute(self) -> str:

@@ -8,7 +8,7 @@ import warnings
 import pickle
 
 from config.io_config import IOConfig
-from utils import ImageRef, TileRef, RECORDS_FILE_COLUMNS
+from utils import ImageRef, TileRef, RECORDS_FILE_COLUMNS, RECORDS_CD_FILE_COLUMNS, RESULTS_CD_FILE_COLUMNS
 
 
 class IO:
@@ -410,6 +410,20 @@ class IO:
         except FileNotFoundError:
             return pd.DataFrame(columns=RECORDS_FILE_COLUMNS)
 
+    def get_records_cd(self) -> pd.DataFrame:
+        try:
+            records = pd.read_csv(self._config.records_cd_path)
+            return records
+        except FileNotFoundError:
+            return pd.DataFrame(columns=RECORDS_CD_FILE_COLUMNS)
+
+    def get_results_cd(self) -> pd.DataFrame:
+        try:
+            records = pd.read_csv(self._config.results_cd_path)
+            return records
+        except FileNotFoundError:
+            return pd.DataFrame(columns=RESULTS_CD_FILE_COLUMNS)
+
     def save_records(self, records: pd.DataFrame):
         """
         Save the records .csv file to the local machine.
@@ -420,6 +434,16 @@ class IO:
         assert set(records.columns) == set(RECORDS_FILE_COLUMNS), \
             f'Columns of records file must be {RECORDS_FILE_COLUMNS}'
         records.to_csv(self._config.records_path, index=False)
+
+    def save_records_cd(self, records_cd: pd.DataFrame):
+        assert set(records_cd.columns) == set(RECORDS_CD_FILE_COLUMNS), \
+            f'Columns of records file must be {RECORDS_CD_FILE_COLUMNS}'
+        records_cd.to_csv(self._config.records_cd_path, index=False)
+
+    def save_results_cd(self, results_cd: pd.DataFrame):
+        assert set(results_cd.columns) == set(RESULTS_CD_FILE_COLUMNS), \
+            f'Columns of records file must be {RESULTS_CD_FILE_COLUMNS}'
+        results_cd.to_csv(self._config.results_cd_path, index=False)
 
     @staticmethod
     def save_pickle(object: Any, filepath: str):
