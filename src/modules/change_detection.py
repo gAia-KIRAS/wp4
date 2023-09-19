@@ -117,7 +117,7 @@ class ChangeDetection(Module):
             self._cd_results.loc[len(self._cd_results)] = record
 
     def update_records(self, subtile):
-        record = [self._cd_id, subtile[:5], subtile, timestamp()]
+        record = [self._cd_id, subtile[:5], subtile, timestamp(), int(self._on_the_server)]
         self._records.loc[len(self._records)] = record
 
     def load_subtile_ts(self, subtile):
