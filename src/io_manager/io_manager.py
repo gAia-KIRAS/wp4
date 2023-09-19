@@ -563,6 +563,12 @@ class IO:
         print(f'Copying {server_records_path} to {local_records_path}')
         sftp.get(server_records_path, local_records_path)
 
+        local_records_cd_path = f'{self._config.records_cd_path}'
+        server_records_cd_path = f'{self._config.base_server_dir}/wp4/operation_records/records_cd.csv'
+        self.check_existence_on_server(server_records_cd_path, dir=False)
+        print(f'Copying {server_records_cd_path} to {local_records_cd_path}')
+        sftp.get(server_records_cd_path, local_records_cd_path)
+
         sftp.close()
 
     @property

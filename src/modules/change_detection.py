@@ -121,7 +121,7 @@ class ChangeDetection(Module):
         self._records.loc[len(self._records)] = record
 
     def load_subtile_ts(self, subtile):
-        print(f'Loading time-series for subtile {subtile}.')
+        print(f' -- Loading time-series for subtile {subtile}.')
 
         assert subtile in subtiles.keys(), f'{subtile} is not a valid subtile.'
 
@@ -177,6 +177,8 @@ class ChangeDetection(Module):
             dates.append(image.extract_date())
 
         # Cut the rasters to the correct size
+
+        print(f' -- Loading completed. Time-series shape: {signal.shape}.')
 
         return signal, dates
 
