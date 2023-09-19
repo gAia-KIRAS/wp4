@@ -128,9 +128,9 @@ class ChangeDetection(Module):
         # Get NCI images of the file
         ts = self._all_nci.loc[self._all_nci['tile'] == subtile[:5]].sort_values(by=['year', 'date_f'])
 
-        # TODO: remove testing pipeline
-        ts = ts.loc[ts['filename'].isin(['nci3_NDVIrec_2020_33TUM_20200101.tif', 'nci3_NDVIrec_2020_33TUM_20200111.tif'])]
-        ts.reset_index(inplace=True)
+        # # TODO: remove testing pipeline
+        # ts = ts.loc[ts['filename'].isin(['nci3_NDVIrec_2020_33TUM_20200101.tif', 'nci3_NDVIrec_2020_33TUM_20200111.tif'])]
+        # ts.reset_index(inplace=True)
 
         # Get the subtile limits
         ilim1, ilim2, jlim1, jlim2 = subtiles[subtile]
