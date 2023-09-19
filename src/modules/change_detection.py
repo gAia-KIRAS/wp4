@@ -1,6 +1,5 @@
-import warnings
 import time
-import gdal
+from osgeo import gdal
 import ruptures as rpt
 from config.config import Config
 from io_manager.io_manager import IO
@@ -8,7 +7,6 @@ from config.io_config import IOConfig
 from modules.abstract_module import Module
 from utils import ImageRef, subtiles, reference_nci_images, timestamp
 import numpy as np
-import pandas as pd
 
 
 class ChangeDetection(Module):
@@ -114,6 +112,8 @@ class ChangeDetection(Module):
         for i, j, date, subproduct in detected_events:
             pixel_id = imin + i, jmin + j
             record = [self._cd_id, subtile[:5], subtile, pixel_id[0], pixel_id[1], timestamp(), date, subproduct]
+            assert len(record) == len(self._cd_results.columns), \
+                f'Length of record {len(record)} does not match length of columns {len(self._cd_results.columns)}'
             self._cd_results.loc[len(self._cd_results)] = record
 
     def update_records(self, subtile):

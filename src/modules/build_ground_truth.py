@@ -1,6 +1,6 @@
 import warnings
 
-import gdal
+from osgeo import gdal
 import geopandas as gpd
 from config.config import Config
 from io_manager.io_manager import IO
