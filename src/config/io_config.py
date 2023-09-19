@@ -147,9 +147,18 @@ class IOConfig:
             "shp": os.path.join(self._base_local_dir, self._aoi_rel_path['shp']),
             "gpkg": os.path.join(self._base_local_dir, self._aoi_rel_path['gpkg'])
         }
-        self._inventory_rel_path = self._config['files']['inventory']
-        self._inventory_path = os.path.join(self._base_local_dir, self._inventory_rel_path)
+        self._inv_extensions = ['shp', 'gpkg']
+        self._inventory_rel_path = {
+            aoi_ext: self._config['files']["inventory_" + aoi_ext] for aoi_ext in self._inv_extensions
+        }
+        self._inventory_path = {
+            aoi_ext: os.path.join(self._base_local_dir, self._inventory_rel_path[aoi_ext])
+            for aoi_ext in self._inv_extensions
+        }
         self._records_path = os.path.join(self._base_local_dir, self._config['files']['records'])
+        self._records_cd_path = os.path.join(self._base_local_dir, self._config['files']['records_cd'])
+        self._results_cd_path = os.path.join(self._base_local_dir, self._config['files']['results_cd'])
+
         self._all_images_path = {
             image_type: os.path.join(self._base_local_dir, image_type_path)
             for image_type, image_type_path in self._config['files']['all_images'].items()
