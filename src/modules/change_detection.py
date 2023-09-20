@@ -145,6 +145,7 @@ class ChangeDetection(Module):
 
         # Define a dates list
         dates = []
+        loading_start_time = time.time()
 
         for i, row in ts.iterrows():
             print(f' -- -- Loading image {i + 1} / {ts.shape[0]}')
@@ -176,10 +177,12 @@ class ChangeDetection(Module):
             # self._io.delete_local_file(image) # TODO: will be active when not testing
 
             dates.append(image.extract_date())
+            print(f' -- -- -- took {round(time.time() - loading_start_time, 2)} seconds.')
 
         # Cut the rasters to the correct size
 
-        print(f' -- Loading completed. Time-series shape: {signal.shape}.')
+        print(f' -- Loading completed. Time-series shape: {signal.shape}. '
+              f' -- -- Took {round(time.time() - loading_start_time, 2)} seconds.')
 
         return signal, dates
 
