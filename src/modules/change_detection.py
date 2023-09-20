@@ -26,7 +26,7 @@ class ChangeDetection(Module):
     def __init__(self, config: Config, io: IO):
         super().__init__(config, io)
 
-        self._records = self._io.get_records_cd()
+        self._cd_records = self._io.get_records_cd()
         self._cd_results = self._io.get_results_cd()
         self._all_nci = self._io.list_all_files_of_type('nci')
 
@@ -55,8 +55,8 @@ class ChangeDetection(Module):
 
         # Get the subtiles that have not been processed yet
         all_subtiles = subtiles.keys()
-        done_subtiles = self._records.loc[
-            (self._records.cd_id == self._cd_id), 'subtile'].values
+        done_subtiles = self._cd_records.loc[
+            (self._cd_records.cd_id == self._cd_id), 'subtile'].values
         todo_subtiles = set(all_subtiles) - set(done_subtiles)
         todo_subtiles = sorted([s for s in todo_subtiles if s[:5] in tiles], key=lambda x: int(x.split('_')[1]))
 
@@ -83,7 +83,7 @@ class ChangeDetection(Module):
             self.update_records(subtile)
 
         # Save records and results
-        self._io.save_records_cd(self._records)
+        self._io.save_records_cd(self._cd_records)
         self._io.save_results_cd(self._cd_results)
 
     def perform_cd(self, signal, dates):
@@ -118,7 +118,7 @@ class ChangeDetection(Module):
 
     def update_records(self, subtile):
         record = [self._cd_id, subtile[:5], subtile, timestamp(), int(self._on_the_server)]
-        self._records.loc[len(self._records)] = record
+        self._cd_records.loc[len(self._cd_records)] = record
 
     def load_subtile_ts(self, subtile):
         print(f' -- Loading time-series for subtile {subtile}.')

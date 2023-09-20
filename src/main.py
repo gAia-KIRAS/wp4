@@ -64,36 +64,42 @@ if __name__ == "__main__":
             module.run()
             io_manager.close_connection()
 
-        elif config.execution_where == 'server':
-            # This means that we are on the local machine, and we want to execute on the server
-            print(' -- Preparing the server execution -- ')
+        else:
 
-            # 1. Upload the config.yaml file to the server
-            io_manager.upload_config()
-            # 2. Upload the inventory data to the server, in case it is not there
-            io_manager.upload_inventory()
-            # 3. Upload the operations data to the server
-            io_manager.upload_operations()
+            if config.execution_where in ['server', 'update_server']:
+                # This means that we are on the local machine, and we want to execute on the server
+                print(' -- Preparing the server execution -- ')
 
-            print(' -- Server execution information -- ')
-            print(f'Executing module: {config.execute}')
-            print(f'Filters: {config.filters}')
-            print(f'Runtime limit: {config.time_limit} minutes')
-            print(f'Execution started at: {datetime.now()}')
-            print(f'Expected to finish before: {datetime.now() + timedelta(minutes=config.time_limit)}')
+                # 1. Upload the config.yaml file to the server
+                io_manager.upload_config()
+                # 2. Upload the inventory data to the server, in case it is not there
+                io_manager.upload_inventory()
+                # 3. Upload the operations data to the server
+                io_manager.upload_operations()
 
-            # 4. Execute the module
-            command = f"""
-            cd {io_manager.config.server_repo_root};
-            nice -n 10 {io_manager.config.server_python_executable} {io_manager.config.server_repo_root}/src/main.py --server_execution;
-            """
-            print(' -- Server execution started -- ')
-            out = io_manager.run_command(command, raise_exception=False)
-            print(*out, sep='\n')
-            print(' -- Server execution finished -- ')
+            if config.execution_where == 'server':
+                print(' -- Server execution information -- ')
+                print(f'Executing module: {config.execute}')
+                print(f'Filters: {config.filters}')
+                print(f'Runtime limit: {config.time_limit} minutes')
+                print(f'Execution started at: {datetime.now()}')
+                print(f'Expected to finish before: {datetime.now() + timedelta(minutes=config.time_limit)}')
 
-            # Copy the records from server to local
-            io_manager.update_records_on_local()
+                # 4. Execute the module
+                command = f"""
+                cd {io_manager.config.server_repo_root};
+                nice -n 10 {io_manager.config.server_python_executable} {io_manager.config.server_repo_root}/src/main.py --server_execution;
+                """
+                print(' -- Server execution started -- ')
+                out = io_manager.run_command(command, raise_exception=False)
+                print(*out, sep='\n')
+                print(' -- Server execution finished -- ')
+
+            if config.execution_where in ['server', 'update_local']:
+                print(' -- Updating local records -- ')
+
+                # 5. Copy the records from server to local
+                io_manager.update_records_on_local()
 
     if config.profiling_active:
         profiler.stop()
