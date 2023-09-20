@@ -103,6 +103,7 @@ class ChangeDetection(Module):
                 if len(result) == 1:
                     continue
                 for r in result[:-1]:
+                    print(f' -- -- -- Detected event at {dates[r]}')
                     # Leave field 'subproduct' empty because CD is applied to all features
                     detected_events.append((i, j, dates[r], ''))
         return detected_events
@@ -148,6 +149,7 @@ class ChangeDetection(Module):
         loading_start_time = time.time()
 
         for i, row in ts.iterrows():
+            image_start_time = time.time()
             print(f' -- -- Loading image {i + 1} / {ts.shape[0]}')
 
             image = ImageRef(row['filename'], row['year'], row['tile'], row['product'], type='nci')
@@ -177,7 +179,7 @@ class ChangeDetection(Module):
             # self._io.delete_local_file(image) # TODO: will be active when not testing
 
             dates.append(image.extract_date())
-            print(f' -- -- -- took {round(time.time() - loading_start_time, 2)} seconds.')
+            print(f' -- -- -- took {round(time.time() - image_start_time, 2)} seconds.')
 
         # Cut the rasters to the correct size
 
