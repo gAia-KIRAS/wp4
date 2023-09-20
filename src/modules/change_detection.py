@@ -94,7 +94,7 @@ class ChangeDetection(Module):
         print(f' -- Start CD at {timestamp()} --')
         for i in range(imax):
             for j in range(jmax):
-                if (i * jmax + j) % 100000 == 0:
+                if (i * jmax + j) % 10000 == 0:
                     print(f' -- -- Processed {round(100 * (i * jmax + j) / (imax * jmax))}% pixels.')
 
                 ts = signal[:, :, i, j]
