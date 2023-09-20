@@ -147,6 +147,7 @@ class ChangeDetection(Module):
         dates = []
 
         for i, row in ts.iterrows():
+            print(f' -- -- Loading image {i + 1} / {ts.shape[0]}')
 
             image = ImageRef(row['filename'], row['year'], row['tile'], row['product'], type='nci')
 
