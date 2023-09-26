@@ -96,6 +96,7 @@ class ChangeDetection(Module):
             for j in range(jmax):
                 if (i * jmax + j) % 10000 == 0:
                     print(f' -- -- Processed {round(100 * (i * jmax + j) / (imax * jmax))}% pixels.')
+                    print(f' -- -- Found {len(detected_events)} events so far. {timestamp()}')
 
                 ts = signal[:, :, i, j]
                 result = pelt.fit_predict(ts, pen=self._pelt_penalty)
@@ -103,7 +104,7 @@ class ChangeDetection(Module):
                 if len(result) == 1:
                     continue
                 for r in result[:-1]:
-                    print(f' -- -- -- Detected event at {dates[r]}')
+                    # print(f' -- -- -- Detected event at {dates[r]}')
                     # Leave field 'subproduct' empty because CD is applied to all features
                     detected_events.append((i, j, dates[r], ''))
         return detected_events
@@ -127,6 +128,7 @@ class ChangeDetection(Module):
             self._io.check_existence_on_local(filepath, dir=False)
         except FileNotFoundError:
             return None
+        print(f' -- Loading time-series for subtile {subtile} from local file.')
         return self._io.load_pickle(filepath)
 
     def load_subtile_ts(self, subtile):
