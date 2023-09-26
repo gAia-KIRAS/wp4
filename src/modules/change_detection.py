@@ -121,10 +121,23 @@ class ChangeDetection(Module):
         record = [self._cd_id, subtile[:5], subtile, timestamp(), int(self._on_the_server)]
         self._cd_records.loc[len(self._cd_records)] = record
 
+    def _check_if_subtile_is_available(self, subtile):
+        filepath = f'{self._io.config.base_local_dir}/ts/ts_{subtile}.pkl'
+        try:
+            self._io.check_existence_on_local(filepath, dir=False)
+        except FileNotFoundError:
+            return None
+        return self._io.load_pickle(filepath)
+
     def load_subtile_ts(self, subtile):
         print(f' -- Loading time-series for subtile {subtile}.')
 
         assert subtile in subtiles.keys(), f'{subtile} is not a valid subtile.'
+
+        res = self._check_if_subtile_is_available(subtile)
+
+        if res:
+            return res
 
         # Get NCI images of the file
         ts = self._all_nci.loc[self._all_nci['tile'] == subtile[:5]].sort_values(by=['year', 'date_f'])
@@ -186,7 +199,16 @@ class ChangeDetection(Module):
         print(f' -- Loading completed. Time-series shape: {signal.shape}. '
               f' -- -- Took {round(time.time() - loading_start_time, 2)} seconds.')
 
+        self._save_subtile_ts(subtile, signal, dates)
+
         return signal, dates
+
+    def _save_subtile_ts(self, subtile, signal, dates):
+        print(f' -- Saving time-series for subtile {subtile}.')
+        dirpath = f'{self._io.config.base_local_dir}/ts'
+        self._io.check_existence_on_local(dirpath, dir=True)
+        filepath = f'{dirpath}/ts_{subtile}.pkl'
+        self._io.save_pickle((signal, dates), filepath)
 
     def create_test_image(self):
         image = ImageRef("nci3_NDVIrec_2020_33TUM_20200101.tif", 2020, '33TUM', 'NDVI_reconstructed', 'nci')
