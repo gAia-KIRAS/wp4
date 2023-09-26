@@ -99,6 +99,7 @@ class ChangeDetection(Module):
                     print(f' -- -- Found {len(detected_events)} events so far. {timestamp()}')
 
                 ts = signal[:, :, i, j]
+                print(f' -- -- -- TS has length: {len(ts)}')
                 result = pelt.fit_predict(ts, pen=self._pelt_penalty)
 
                 if len(result) == 1:
