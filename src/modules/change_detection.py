@@ -88,7 +88,6 @@ class ChangeDetection(Module):
 
     def perform_cd(self, signal, dates):
         detected_events = []
-        pelt = rpt.Pelt(model='rbf')
         ts_length, n_bands, imax, jmax = signal.shape
         assert ts_length == len(dates), f'Raster shape {signal.shape} does not match dates length {len(dates)}'
         print(f' -- Start CD at {timestamp()} --')
@@ -99,12 +98,11 @@ class ChangeDetection(Module):
                     print(f' -- -- Found {len(detected_events)} events so far. {timestamp()}')
 
                 ts = signal[:, :, i, j]
-                print(f' -- -- -- TS has length: {len(ts)}')
+                pelt = rpt.Pelt(model='rbf')
                 result = pelt.fit_predict(ts, pen=self._pelt_penalty)
 
                 if len(result) == 1:
                     continue
-                print(f'Detected {len(result) - 1} events at pixel ({i}, {j}).')
                 for r in result[:-1]:
                     # print(f' -- -- -- Detected event at {dates[r]}')
                     # Leave field 'subproduct' empty because CD is applied to all features
