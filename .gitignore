@@ -10,6 +10,7 @@ io_config.yaml
 *.dbf
 *.prj
 *.cpg
+*.pkl
 /.idea/misc.xml
 /.idea/inspectionProfiles/profiles_settings.xml
 /.idea/vcs.xml
