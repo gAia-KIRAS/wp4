@@ -103,6 +103,7 @@ class ChangeDetection(Module):
 
                 if len(result) == 1:
                     continue
+                print(f'Detected {len(result) - 1} events at pixel ({i}, {j}).')
                 for r in result[:-1]:
                     # print(f' -- -- -- Detected event at {dates[r]}')
                     # Leave field 'subproduct' empty because CD is applied to all features
