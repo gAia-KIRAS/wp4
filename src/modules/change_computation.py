@@ -171,6 +171,11 @@ class ChangeComputation(Module):
         delta = np.zeros((nci_1.shape[0], nci_1.shape[1], nci_1.shape[2]))
         for i in range(nci_1.shape[0]):
             delta[i] = np.divide(np.subtract(nci_2[i], nci_1[i]), nci_1[i])
+            # If delta is nan, set it to zero
+            delta[i][np.isnan(delta[i])] = 0
+            # If delta is inf, compute (nci_2 - nci_1) / (nci_1 + 1e-6)
+            delta[i][np.isinf(delta[i])] = np.divide(np.subtract(nci_2[i][np.isinf(delta[i])], nci_1[i][np.isinf(delta[i])]),
+                                                        nci_1[i][np.isinf(delta[i])] + 1e-6)
 
         # Save delta
         delta_image = self._save_delta(delta, image_1, srs=srs)
