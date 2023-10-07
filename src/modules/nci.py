@@ -73,9 +73,9 @@ class NCI(Module):
                       for row in to_compute.itertuples()]
 
         print(f'Filters: {self._config.filters}')
-        print(f'Intersecting {len(image_refs)} images with the AOI.\n')
+        print(f'Computing NCI for {len(image_refs)} images.\n')
         print(f'Time limit: {self._time_limit} minutes.')
-        print(f'{len(images_df) - len(image_refs)} images have already been intersected.\n')
+        print(f'{len(images_df) - len(image_refs)} images already have NCI computed.\n')
 
         start_timestamp, start_time = timestamp(), time.time()
         i = 0
@@ -233,6 +233,7 @@ class NCI(Module):
         filepath_1, filepath_2 = self.build_and_check_paths(image_1, image_2, on_the_server=on_the_server)
 
         # Both are locally available, we can compute the NCI
+        r_1 = gdal.Open(filepath_1).ReadAsArray()
         r_2 = gdal.Open(filepath_2).ReadAsArray()
 
         # Get SRS from image_1

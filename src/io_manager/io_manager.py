@@ -473,7 +473,14 @@ class IO:
 
     def filter_all_images(self, image_type: str, filters: dict) -> pd.DataFrame:
         """
-        Filter all raw
+        Filter all images of one type according to the given filters
+
+        Args:
+            image_type: string in IMAGE_TYPES
+            filters: dictionary with the filters to apply. Can have the following keys:
+                - product: list of strings with the products to filter
+                - year: list of integers with the years to filter
+                - tile: list of strings with the tiles to filter
         """
         images_df = self.list_all_files_of_type(image_type)[['year', 'tile', 'product', 'filename']]
         if filters['product']:
