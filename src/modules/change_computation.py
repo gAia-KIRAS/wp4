@@ -101,14 +101,14 @@ class ChangeComputation(Module):
             if not on_the_server:
                 pass
                 # Delete first image from local machine. Second image will be used for the next iteration
-                # self._io.delete_local_file(image_1)
-                # self._io.delete_local_file(raw_image_1)
+                self._io.delete_local_file(image_1)
+                self._io.delete_local_file(raw_image_1)
 
                 # Upload NCI to server
-                # self._io.upload_file(delta_image)
+                self._io.upload_file(delta_image)
 
                 # Delete image from local machine
-                # self._io.delete_local_file(delta_image)
+                self._io.delete_local_file(delta_image)
 
             # Update records
             record = ['nci', 'delta', image_1.tile, image_1.year, image_1.product, timestamp(),
