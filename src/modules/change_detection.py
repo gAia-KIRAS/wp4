@@ -28,7 +28,7 @@ class ChangeDetection(Module):
 
         self._cd_records = self._io.get_records_cd()
         self._cd_results = self._io.get_results_cd()
-        self._all_nci = self._io.list_all_files_of_type('nci')
+        self._all_delta = self._io.list_all_files_of_type('delta')
 
         self._on_the_server = None
         self._cd_id = None
@@ -141,23 +141,17 @@ class ChangeDetection(Module):
         if res:
             return res
 
-        # Get NCI images of the file
-        ts = self._all_nci.loc[self._all_nci['tile'] == subtile[:5]].sort_values(by=['year', 'date_f'])
+        # Get Delta images of the file
+        ts = self._all_delta.loc[self._all_delta['tile'] == subtile[:5]].sort_values(by=['year', 'date_f'])
 
         # # TODO: remove testing pipeline
-        # ts = ts.loc[ts['filename'].isin(['nci3_NDVIrec_2020_33TUM_20200101.tif', 'nci3_NDVIrec_2020_33TUM_20200111.tif'])]
-        # ts.reset_index(inplace=True)
+        ts = ts.loc[ts['filename'].isin(['delta_NDVIrec_2018_33TUM_20180101.tif', 'delta_NDVIrec_2018_33TUM_20180111.tif'])]
+        ts.reset_index(inplace=True)
 
         # Get the subtile limits
         ilim1, ilim2, jlim1, jlim2 = subtiles[subtile]
 
-        # # Define one raster for each band: r = correlation, a = intercept, b = slope, m = pixel vs average
-        # raster_r = np.ndarray(shape=(ts.shape[0], ilim2 - ilim1, jlim2 - jlim1), dtype=np.float32)
-        # raster_a = np.ndarray(shape=(ts.shape[0], ilim2 - ilim1, jlim2 - jlim1), dtype=np.float32)
-        # raster_b = np.ndarray(shape=(ts.shape[0], ilim2 - ilim1, jlim2 - jlim1), dtype=np.float32)
-        # raster_m = np.ndarray(shape=(ts.shape[0], ilim2 - ilim1, jlim2 - jlim1), dtype=np.float32)
-
-        signal = np.ndarray(shape=(ts.shape[0], 4, ilim2 - ilim1, jlim2 - jlim1), dtype=np.float32)
+        signal = np.ndarray(shape=(ts.shape[0], 5, ilim2 - ilim1, jlim2 - jlim1), dtype=np.float32)
 
         # Define a dates list
         dates = []
@@ -167,7 +161,7 @@ class ChangeDetection(Module):
             image_start_time = time.time()
             print(f' -- -- Loading image {i + 1} / {ts.shape[0]}')
 
-            image = ImageRef(row['filename'], row['year'], row['tile'], row['product'], type='nci')
+            image = ImageRef(row['filename'], row['year'], row['tile'], row['product'], type='delta')
 
             if not self._on_the_server:
                 # Download the image (if not available locally, handled by IO)

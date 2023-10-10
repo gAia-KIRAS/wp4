@@ -203,7 +203,7 @@ class ImageRef:
             date = self.filename.split('_')[2]
         elif self.type == 'raw':
             date = self.filename.split('_')[7]
-        elif self.type in ['crop', 'nci']:
+        elif self.type in ['crop', 'nci', 'delta']:
             date = self.filename.split('_')[-1].split('.')[0]
         else:
             raise Exception("Type of image not in ['raw', 'crop']. Date cannot be extracted.")

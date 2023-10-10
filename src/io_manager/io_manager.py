@@ -213,7 +213,10 @@ class IO:
 
     def list_all_files_of_type(self, image_type) -> pd.DataFrame:
         """
-        List all raw files on the server.
+        List all files on the server of a specific type.
+
+        Args:
+            image_type: string in IMAGE_TYPES
 
         Returns:
             df (pd.DataFrame): dataframe with the whole information of the files in the directory
@@ -226,6 +229,8 @@ class IO:
             for tile in self._config.available_tiles:
                 for year in self._config.available_years:
                     for product in self._config.available_products:
+                        if image_type == 'delta' and product == 'NDVI_raw':
+                            continue
                         print(f'\nListing files for {year}, {tile}, {product}')
                         df = pd.concat([df, self.list_files_on_server(TileRef(year, tile, product), image_type)[1]])
             df.to_csv(self._config.all_images_path[image_type], index=False)
