@@ -145,8 +145,8 @@ class ChangeDetection(Module):
         ts = self._all_delta.loc[self._all_delta['tile'] == subtile[:5]].sort_values(by=['year', 'date_f'])
 
         # # TODO: remove testing pipeline
-        ts = ts.loc[ts['filename'].isin(['delta_NDVIrec_2018_33TUM_20180101.tif', 'delta_NDVIrec_2018_33TUM_20180111.tif'])]
-        ts.reset_index(inplace=True)
+        # ts = ts.loc[ts['filename'].isin(['delta_NDVIrec_2018_33TUM_20180101.tif', 'delta_NDVIrec_2018_33TUM_20180111.tif'])]
+        # ts.reset_index(inplace=True)
 
         # Get the subtile limits
         ilim1, ilim2, jlim1, jlim2 = subtiles[subtile]
