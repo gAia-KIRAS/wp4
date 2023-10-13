@@ -82,7 +82,7 @@ class ChangeDetection(Module):
         start_timestamp, start_time = timestamp(), time.time()
         i = 0
         while i < len(cd_todo) and time.time() - start_time < self._time_limit:
-            print(f' -- Processing image {i + 1} of {len(cd_todo)}')
+            print(f' -- Processing image {i + 1} of {len(cd_todo)}. {time.time() - start_time} seconds elapsed.')
             tile, filename, year = cd_todo[i]
             image_delta = ImageRef(filename, year, tile, 'NDVI_reconstructed', type='delta')
             image_cprob = ImageRef(filename.replace('delta', 'cprob'), tile_ref=image_delta.tile_ref, type='cprob')
@@ -101,6 +101,8 @@ class ChangeDetection(Module):
         # Save records and results
         self._io.save_records_cd(self._cd_records)
         self._io.save_results_cd(self._cd_results)
+
+        print(f' -- CD finished. {i} images processed in {time.time() - start_time} seconds.')
 
     def perform_cd(self, delta_imref: ImageRef, cprob_imref: ImageRef) -> list:
         """
@@ -129,14 +131,14 @@ class ChangeDetection(Module):
         return list(zip(detected_events, detected_probs))
 
     def apply_filter(self, c_prob):
-        print(f' -- Applying threshold {self._threshold} to c_prob.tif file.')
+        print(f' ---- Applying threshold {self._threshold} to c_prob.tif file.')
         # Get index of the pixels with prob > threshold
         detected_events = np.asarray(np.where(c_prob >= self._threshold)).T.tolist()
         detected_probs = c_prob[np.where(c_prob >= self._threshold)]
         return detected_events, detected_probs
 
     def compute_c_prob(self, delta_imref: ImageRef) -> None:
-        print(f' -- Computing c_prob.tif file for {delta_imref}.')
+        print(f' ---- Computing c_prob.tif file for {delta_imref}.')
 
         if not self._on_the_server:
             # Download the delta image
