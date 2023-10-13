@@ -6,6 +6,7 @@ import pandas as pd
 import os
 import warnings
 import pickle
+from osgeo import gdal
 
 from config.io_config import IOConfig
 from utils import ImageRef, TileRef, RECORDS_FILE_COLUMNS, RECORDS_CD_FILE_COLUMNS, RESULTS_CD_FILE_COLUMNS
@@ -588,6 +589,52 @@ class IO:
         sftp.get(server_results_cd_path, local_results_cd_path)
 
         sftp.close()
+
+    def save_ndarray_as_tif(self, data: np.ndarray, image_ref: ImageRef) -> None:
+        """
+        Save a numpy array as a .tif file on the local machine. If it already exists, throw a warning but overwrite it.
+
+        Args:
+            data: numpy array with the data to save. Must have shape (n_bands, rows, cols)
+            image_ref: ImageRef object with the reference to the image to save
+
+        """
+        # Set directories and filepaths
+        file_dir = f'{self._config.base_local_dir}/{image_ref.rel_dir()}'
+        self.check_existence_on_local(file_dir, dir=True)
+        filepath = f'{file_dir}/{image_ref.filename}'
+        filename_aux = image_ref.filename.replace('.tif', '_aux.tif')
+        filepath_aux = f'{file_dir}/{filename_aux}'
+
+        try:
+            self.check_existence_on_local(filepath, dir=False)
+            warnings.warn(f'\nFile {image_ref.filename} already exists on local machine. Will not be downloaded')
+        except FileNotFoundError:
+            pass
+
+        # Write image
+        driver = gdal.GetDriverByName('GTiff')
+        n_bands, rows, cols = data.shape if data.ndim == 3 else (1, *data.shape)
+        dataset = driver.Create(filepath_aux, cols, rows, n_bands, gdal.GDT_Float32)
+        for i in range(n_bands):
+            band = dataset.GetRasterBand(i + 1)
+            band.WriteArray(data[i]) if data.ndim == 3 else band.WriteArray(data)
+        dataset.FlushCache()
+        dataset = None
+
+        # Use gdal translate to compress the image using LZW
+        gdal.Translate(filepath, filepath_aux, options='-co COMPRESS=LZW')
+
+        # Delete aux file
+        self.delete_local_file(ImageRef(filename_aux, tile_ref=image_ref.tile_ref, type=image_ref.type))
+
+    def load_tif_as_ndarray(self, image_ref: ImageRef) -> np.ndarray:
+        c_prob_filepath = f'{self.config.base_local_dir}/{image_ref.rel_filepath()}'
+        try:
+            self.check_existence_on_local(c_prob_filepath, dir=False)
+        except FileNotFoundError:
+            raise FileNotFoundError(f'Error while loading file. File {c_prob_filepath} does not exist.')
+        return gdal.Open(c_prob_filepath).ReadAsArray()
 
     @property
     def config(self) -> IOConfig:

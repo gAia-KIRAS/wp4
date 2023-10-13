@@ -3,9 +3,9 @@ from datetime import datetime
 from typing import Union
 
 RECORDS_FILE_COLUMNS = ['from', 'to', 'tile', 'year', 'product', 'timestamp', 'filename_from', 'filename_to', 'success']
-RECORDS_CD_FILE_COLUMNS = ['cd_id', 'tile', 'subtile', 'timestamp', 'server_execution']
-RESULTS_CD_FILE_COLUMNS = ['cd_id', 'tile', 'subtile', 'i', 'j', 'timestamp', 'detected_breakpoint', 'subproduct']
-IMAGE_TYPES = ['raw', 'crop', 'nci', 'testing', 'ground_truth', 'delta']
+RECORDS_CD_FILE_COLUMNS = ['cd_id', 'threshold', 'tile', 'filename_from', 'filename_to', 'detected_events', 'timestamp']
+RESULTS_CD_FILE_COLUMNS = ['cd_id', 'threshold', 'tile', 'i', 'j', 'detected_breakpoint', 'd_prob', 'timestamp']
+IMAGE_TYPES = ['raw', 'crop', 'nci', 'testing', 'ground_truth', 'delta', 'cprob']
 
 RAW_IMAGE_SIZES = {
     '33TUM': (10980, 10980),
@@ -203,7 +203,7 @@ class ImageRef:
             date = self.filename.split('_')[2]
         elif self.type == 'raw':
             date = self.filename.split('_')[7]
-        elif self.type in ['crop', 'nci', 'delta']:
+        elif self.type in ['crop', 'nci', 'delta', 'cprob']:
             date = self.filename.split('_')[-1].split('.')[0]
         else:
             raise Exception("Type of image not in ['raw', 'crop']. Date cannot be extracted.")

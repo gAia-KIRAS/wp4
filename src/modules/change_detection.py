@@ -1,4 +1,7 @@
 import time
+from typing import Tuple
+
+import pandas as pd
 from osgeo import gdal
 import ruptures as rpt
 from config.config import Config
@@ -11,16 +14,27 @@ import numpy as np
 
 class ChangeDetection(Module):
     """
-    Change-Detection module. The input are the NCI images, which is a 4-band time-series of satellite images.
-    The output is a list of detected events, with the following information:
-    - cd_id: ID of the change-detection operation
-    - tile: tile of the detected event
-    - subtile: subtile of the detected event
-    - pixel_i: i coordinate of the detected event
-    - pixel_j: j coordinate of the detected event
-    - timestamp: timestamp of the detected event
-    - date: date of the detected event
-    - subproduct: subproduct of the detected event (r, a, b, m)
+    Change-Detection module. The input are the Delta images, which is a 5-band time-series.
+
+    If the c_prob.tif file already exists, only the application of the threshold is performed, and the
+    existing image is used (not recomputed).
+
+    There are two outputs:
+    - results_cd.csv: tabular file with the detected events that have prob > threshold
+    - c_prob.tif: raster file with the probability of change for each pixel
+
+    The results_cd file has the following columns:
+    - cd_id: ID of the CD run
+    - threshold: threshold used to filter the detected events
+    - tile: tile ID
+    - subtile: subtile ID
+    - i: row index of the pixel
+    - j: column index of the pixel
+    - timestamp: timestamp of the CD run
+    - detected_breakpoint: timestamp of the detected breakpoint
+    - d_prob: probability of change
+
+    The c_prob.tif file has only one band, which is the probability of change for each pixel.
     """
 
     def __init__(self, config: Config, io: IO):
@@ -32,94 +46,153 @@ class ChangeDetection(Module):
 
         self._on_the_server = None
         self._cd_id = None
-        self._pelt_penalty = None
+        self._threshold = None
 
     def run(self, on_the_server: bool = False) -> None:
-        # Each tile is divided in [1000x1000] pixels. Starting from the top left corner, we take the first [1000x1000]
-        # pixels and apply CD to them. Then we take the next [1000x1000] pixels and apply CD to them, and so on.
-        # The right-most subtile can have width < 1000, and the bottom-most subtile can have height < 1000.
-
         # Update parameters
         self._on_the_server = on_the_server
         self._cd_id = self._config.cd_conf['cd_id']
-        self._pelt_penalty = self._config.cd_conf['penalty']
+        self._threshold = self._config.cd_conf['threshold']
 
         # Check filters
-        assert not self._config.filters['year'], 'Year filter is not supported for CD'
         assert not (set(self._config.filters['product']) - {'NDVI_reconstructed'}), \
             'CD can only be applied to NDVI_reconstructed'
 
-        # Tiles to execute
-        tiles = self._config.filters['tile'] \
-            if self._config.filters['tile'] is not None else self._io.config.available_tiles
+        # Get all tiles and dates
+        cd_done = self._cd_records.loc[
+            (self._cd_records['cd_id'] == self._cd_id) &
+            (self._cd_records['threshold'] == self._threshold),
+            ['tile', 'filename_from']
+        ].rename(columns={'filename_from': 'filename'})
 
-        # Get the subtiles that have not been processed yet
-        all_subtiles = subtiles.keys()
-        done_subtiles = self._cd_records.loc[
-            (self._cd_records.cd_id == self._cd_id), 'subtile'].values
-        todo_subtiles = set(all_subtiles) - set(done_subtiles)
-        todo_subtiles = sorted([s for s in todo_subtiles if s[:5] in tiles], key=lambda x: int(x.split('_')[1]))
+        cd_todo = self._all_delta.loc[
+            ~self._all_delta['filename'].isin(cd_done['filename']) &
+            (self._all_delta['tile'].isin(self._config.filters['tile'])) &
+            (self._all_delta['year'].isin(self._config.filters['year'])),
+            ['tile', 'filename', 'year']
+        ].values.tolist()
 
         print(f'Filters: {self._config.filters}')
-        print(f'CD ID: {self._cd_id}')
-        print(f'Number of subtiles to process: {len(todo_subtiles)}')
+        print(f'CD ID: {self._cd_id}  -  Threshold: {self._threshold}')
+        print(f'Number of images to process: {len(cd_todo)}')
 
         start_timestamp, start_time = timestamp(), time.time()
         i = 0
-        while i < len(todo_subtiles) and time.time() - start_time < self._time_limit:
-            print(f' -- Processing subtile {todo_subtiles[i]} ({i + 1} of {len(todo_subtiles)}). ')
-            subtile = todo_subtiles[i]
+        while i < len(cd_todo) and time.time() - start_time < self._time_limit:
+            print(f' -- Processing image {i + 1} of {len(cd_todo)}')
+            tile, filename, year = cd_todo[i]
+            image_delta = ImageRef(filename, year, tile, 'NDVI_reconstructed', type='delta')
+            image_cprob = ImageRef(filename.replace('delta', 'cprob'), tile_ref=image_delta.tile_ref, type='cprob')
 
             # Load the time-series for the subtile
-            signal, dates = self.load_subtile_ts(subtile)
-
-            # Run the CD algorithm
-            detected_events = self.perform_cd(signal, dates)
+            detected_events = self.perform_cd(image_delta, image_cprob)
 
             # Add detected events to the results
-            self.add_results(subtile, detected_events)
+            self.add_results(image_cprob, detected_events, image_cprob.extract_date())
 
             # Update the records
-            self.update_records(subtile)
+            self.update_records(image_delta, image_cprob, len(detected_events))
+
+            i += 1
 
         # Save records and results
         self._io.save_records_cd(self._cd_records)
         self._io.save_results_cd(self._cd_results)
 
-    def perform_cd(self, signal, dates):
-        detected_events = []
-        ts_length, n_bands, imax, jmax = signal.shape
-        assert ts_length == len(dates), f'Raster shape {signal.shape} does not match dates length {len(dates)}'
-        print(f' -- Start CD at {timestamp()} --')
-        for i in range(imax):
-            for j in range(jmax):
-                if (i * jmax + j) % 10000 == 0:
-                    print(f' -- -- Processed {round(100 * (i * jmax + j) / (imax * jmax))}% pixels.')
-                    print(f' -- -- Found {len(detected_events)} events so far. {timestamp()}')
+    def perform_cd(self, delta_imref: ImageRef, cprob_imref: ImageRef) -> list:
+        """
+        Performs the change-detection on the given image.
+        Checks if the c_prob image exists. Otherwise, computes it.
+        Args:
+            delta_imref: ImageRef of the delta image
+            cprob_imref: ImageRef of the c_prob image
 
-                ts = signal[:, :, i, j]
-                pelt = rpt.Pelt(model='rbf')
-                result = pelt.fit_predict(ts, pen=self._pelt_penalty)
+        Returns:
+            detected_events: list of detected events and the associated probabilites
+        """
+        cprob_dir = f'{self._io.config.base_local_dir}/{cprob_imref.rel_dir()}'
+        cprob_filepath = f'{cprob_dir}/{cprob_imref.filename}'
 
-                if len(result) == 1:
-                    continue
-                for r in result[:-1]:
-                    # print(f' -- -- -- Detected event at {dates[r]}')
-                    # Leave field 'subproduct' empty because CD is applied to all features
-                    detected_events.append((i, j, dates[r], ''))
-        return detected_events
+        try:
+            self._io.check_existence_on_local(cprob_filepath, dir=False)
+        except FileNotFoundError:
+            self.compute_c_prob(delta_imref)
 
-    def add_results(self, subtile, detected_events):
-        imin, imax, jmin, jmax = subtiles[subtile]
-        for i, j, date, subproduct in detected_events:
-            pixel_id = imin + i, jmin + j
-            record = [self._cd_id, subtile[:5], subtile, pixel_id[0], pixel_id[1], timestamp(), date, subproduct]
-            assert len(record) == len(self._cd_results.columns), \
-                f'Length of record {len(record)} does not match length of columns {len(self._cd_results.columns)}'
-            self._cd_results.loc[len(self._cd_results)] = record
+        # Load the c_prob.tif file
+        c_prob = self._io.load_tif_as_ndarray(cprob_imref)
 
-    def update_records(self, subtile):
-        record = [self._cd_id, subtile[:5], subtile, timestamp(), int(self._on_the_server)]
+        detected_events, detected_probs = self.apply_filter(c_prob)
+
+        return list(zip(detected_events, detected_probs))
+
+    def apply_filter(self, c_prob):
+        print(f' -- Applying threshold {self._threshold} to c_prob.tif file.')
+        # Get index of the pixels with prob > threshold
+        detected_events = np.asarray(np.where(c_prob >= self._threshold)).T.tolist()
+        detected_probs = c_prob[np.where(c_prob >= self._threshold)]
+        return detected_events, detected_probs
+
+    def compute_c_prob(self, delta_imref: ImageRef) -> None:
+        print(f' -- Computing c_prob.tif file for {delta_imref}.')
+
+        if not self._on_the_server:
+            # Download the delta image
+            self._io.download_file(delta_imref)
+        delta = self._io.load_tif_as_ndarray(delta_imref)
+
+        n_bands = delta.shape[0]
+        delta[np.isnan(delta)] = 0
+        for b in range(n_bands):
+            # Clip with the 5th and 95th percentiles
+            v_min, v_max = np.percentile(delta[b, :, :], [5, 95])
+            delta[b, :, :] = np.clip(delta[b, :, :], v_min, v_max)
+
+            # Normalize to [0, 1]
+            delta[b, :, :] = (delta[b, :, :] - v_min) / (v_max - v_min)
+
+        # Average the bands 0 (correlation), 3 (pixel vs average), 4 (ndvi differences)
+        c_prob = np.mean(delta[[0, 3, 4], :, :], axis=0)
+
+        # Save the c_prob.tif file
+        c_prob_filename = f'{delta_imref.filename.replace("delta", "cprob")}'
+
+        c_prob_imref = ImageRef(c_prob_filename, tile_ref=delta_imref.tile_ref, type='cprob')
+        self._io.save_ndarray_as_tif(c_prob, c_prob_imref)
+
+    def add_results(self, image_ref: ImageRef, detected_events: list, date: str) -> None:
+        """
+        Adds the detected events to the results file. One row per detected event.
+
+        Args:
+            image_ref: ImageRef of the image
+            detected_events: list of detected events and the associated probabilites
+            date: date of the image. Will be the date of the detected breakpoint
+        """
+        new_records = {
+            'i': [i for (i, j), prob in detected_events],
+            'j': [j for (i, j), prob in detected_events],
+            'd_prob': [prob for (i, j), prob in detected_events]
+        }
+        new_records = pd.DataFrame(new_records)
+        new_records['cd_id'] = self._cd_id
+        new_records['threshold'] = self._threshold
+        new_records['tile'] = image_ref.tile
+        new_records['detected_breakpoint'] = date
+        new_records['timestamp'] = timestamp()
+
+        self._cd_results = pd.concat([self._cd_results, new_records], ignore_index=True).reset_index(drop=True)
+
+    def update_records(self, image_from: ImageRef, image_to: ImageRef, n_detected_events: int) -> None:
+        """
+        Updates the records file with the new CD run.
+
+        Args:
+            image_from: ImageRef of the delta image
+            image_to: ImageRef of the c_prob image
+            n_detected_events: number of detected events
+        """
+        record = [self._cd_id, self._threshold, image_from.tile, image_from.filename, image_to
+                  .filename, n_detected_events, timestamp()]
         self._cd_records.loc[len(self._cd_records)] = record
 
     def _check_if_subtile_is_available(self, subtile):
@@ -130,74 +203,6 @@ class ChangeDetection(Module):
             return None
         print(f' -- Loading time-series for subtile {subtile} from local file.')
         return self._io.load_pickle(filepath)
-
-    def load_subtile_ts(self, subtile):
-        print(f' -- Loading time-series for subtile {subtile}.')
-
-        assert subtile in subtiles.keys(), f'{subtile} is not a valid subtile.'
-
-        res = self._check_if_subtile_is_available(subtile)
-
-        if res:
-            return res
-
-        # Get Delta images of the file
-        ts = self._all_delta.loc[self._all_delta['tile'] == subtile[:5]].sort_values(by=['year', 'date_f'])
-
-        # # TODO: remove testing pipeline
-        # ts = ts.loc[ts['filename'].isin(['delta_NDVIrec_2018_33TUM_20180101.tif', 'delta_NDVIrec_2018_33TUM_20180111.tif'])]
-        # ts.reset_index(inplace=True)
-
-        # Get the subtile limits
-        ilim1, ilim2, jlim1, jlim2 = subtiles[subtile]
-
-        signal = np.ndarray(shape=(ts.shape[0], 5, ilim2 - ilim1, jlim2 - jlim1), dtype=np.float32)
-
-        # Define a dates list
-        dates = []
-        loading_start_time = time.time()
-
-        for i, row in ts.iterrows():
-            image_start_time = time.time()
-            print(f' -- -- Loading image {i + 1} / {ts.shape[0]}')
-
-            image = ImageRef(row['filename'], row['year'], row['tile'], row['product'], type='delta')
-
-            if not self._on_the_server:
-                # Download the image (if not available locally, handled by IO)
-                self._io.download_file(image)
-
-            if self._on_the_server:
-                image_dir = self._io.build_remote_dir_for_image(image)
-                image_filepath = f'{image_dir}/{image.filename}'
-            else:
-                image_dir = f'{self._io.config.base_local_dir}/{image.rel_dir()}'
-                image_filepath = f'{image_dir}/{image.filename}'
-
-            self._io.check_existence_on_local(image_filepath, dir=False)
-
-            r = gdal.Open(image_filepath).ReadAsArray()
-
-            signal[i] = r[:, ilim1:ilim2, jlim1:jlim2]
-
-            # raster_r[i] = r[0, ilim1:ilim2, jlim1:jlim2]
-            # raster_a[i] = r[1, ilim1:ilim2, jlim1:jlim2]
-            # raster_b[i] = r[2, ilim1:ilim2, jlim1:jlim2]
-            # raster_m[i] = r[3, ilim1:ilim2, jlim1:jlim2]
-
-            # self._io.delete_local_file(image) # TODO: will be active when not testing
-
-            dates.append(image.extract_date())
-            print(f' -- -- -- took {round(time.time() - image_start_time, 2)} seconds.')
-
-        # Cut the rasters to the correct size
-
-        print(f' -- Loading completed. Time-series shape: {signal.shape}. '
-              f' -- -- Took {round(time.time() - loading_start_time, 2)} seconds.')
-
-        self._save_subtile_ts(subtile, signal, dates)
-
-        return signal, dates
 
     def _save_subtile_ts(self, subtile, signal, dates):
         print(f' -- Saving time-series for subtile {subtile}.')
