@@ -62,8 +62,8 @@ class ChangeDetection(Module):
         cd_done = self._cd_records.loc[
             (self._cd_records['cd_id'] == self._cd_id) &
             (self._cd_records['threshold'] == self._threshold),
-            ['tile', 'filename_from']
-        ].rename(columns={'filename_from': 'filename'})
+            ['tile', 'filename_from', 'year']
+        ].rename(columns={'filename_from': 'filename'}).values.tolist()
 
         years_filter = self._config.filters['year'] if self._config.filters['year'] else self._io.config.available_years
         tiles_filter = self._config.filters['tile'] if self._config.filters['tile'] else self._io.config.available_tiles
@@ -74,6 +74,7 @@ class ChangeDetection(Module):
             (self._all_delta['year'].isin(years_filter)),
             ['tile', 'filename', 'year']
         ].values.tolist()
+        cd_todo = set(cd_todo) - set(cd_done)
 
         print(f'Filters: {self._config.filters}')
         print(f'CD ID: {self._cd_id}  -  Threshold: {self._threshold}')
