@@ -65,10 +65,13 @@ class ChangeDetection(Module):
             ['tile', 'filename_from']
         ].rename(columns={'filename_from': 'filename'})
 
+        years_filter = self._config.filters['year'] if self._config.filters['year'] else self._io.config.available_years
+        tiles_filter = self._config.filters['tile'] if self._config.filters['tile'] else self._io.config.available_tiles
+
         cd_todo = self._all_delta.loc[
             ~self._all_delta['filename'].isin(cd_done['filename']) &
-            (self._all_delta['tile'].isin(self._config.filters['tile'])) &
-            (self._all_delta['year'].isin(self._config.filters['year'])),
+            (self._all_delta['tile'].isin(tiles_filter)) &
+            (self._all_delta['year'].isin(years_filter)),
             ['tile', 'filename', 'year']
         ].values.tolist()
 
