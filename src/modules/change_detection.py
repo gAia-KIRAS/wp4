@@ -69,12 +69,14 @@ class ChangeDetection(Module):
         tiles_filter = self._config.filters['tile'] if self._config.filters['tile'] else self._io.config.available_tiles
 
         cd_todo = self._all_delta.loc[
-            ~self._all_delta['filename'].isin(cd_done['filename']) &
             (self._all_delta['tile'].isin(tiles_filter)) &
             (self._all_delta['year'].isin(years_filter)),
             ['tile', 'filename', 'year']
         ].values.tolist()
-        cd_todo = set(cd_todo) - set(cd_done)
+        # Convert to list of tuples
+        cd_todo = [(tile, filename, year) for tile, filename, year in cd_todo]
+        cd_done = [(tile, filename, year) for tile, filename, year in cd_done]
+        cd_todo = sorted(list(set(cd_todo) - set(cd_done)))
 
         print(f'Filters: {self._config.filters}')
         print(f'CD ID: {self._cd_id}  -  Threshold: {self._threshold}')
@@ -83,7 +85,8 @@ class ChangeDetection(Module):
         start_timestamp, start_time = timestamp(), time.time()
         i = 0
         while i < len(cd_todo) and time.time() - start_time < self._time_limit * 60:
-            print(f' -- Processing image {i + 1} of {len(cd_todo)}. {time.time() - start_time} seconds elapsed.')
+            print(f' -- Processing image {i + 1} of {len(cd_todo)}. {time.time() - start_time} seconds elapsed.'
+                  f'\n ---- Image name: {cd_todo[i][1]}')
             tile, filename, year = cd_todo[i]
             image_delta = ImageRef(filename, year, tile, 'NDVI_reconstructed', type='delta')
             image_cprob = ImageRef(filename.replace('delta', 'cprob'), tile_ref=image_delta.tile_ref, type='cprob')
@@ -139,7 +142,7 @@ class ChangeDetection(Module):
         return detected_events, detected_probs
 
     def compute_c_prob(self, delta_imref: ImageRef) -> None:
-        print(f' ---- Computing c_prob.tif file for {delta_imref}.')
+        print(f' ---- Computing c_prob.tif file.')
 
         if not self._on_the_server:
             # Download the delta image
@@ -197,7 +200,7 @@ class ChangeDetection(Module):
             image_to: ImageRef of the c_prob image
             n_detected_events: number of detected events
         """
-        record = [self._cd_id, self._threshold, image_from.tile, image_from.filename, image_to
+        record = [self._cd_id, self._threshold, image_from.tile, image_from.year, image_from.filename, image_to
                   .filename, n_detected_events, timestamp()]
         self._cd_records.loc[len(self._cd_records)] = record
 
@@ -216,119 +219,3 @@ class ChangeDetection(Module):
         self._io.check_existence_on_local(dirpath, dir=True)
         filepath = f'{dirpath}/ts_{subtile}.pkl'
         self._io.save_pickle((signal, dates), filepath)
-
-    def create_test_image(self):
-        image = ImageRef("nci3_NDVIrec_2020_33TUM_20200101.tif", 2020, '33TUM', 'NDVI_reconstructed', 'nci')
-        self._io.download_file(image)
-        base = gdal.Open(f'{self._io.config.base_local_dir}/{image.rel_filepath()}').ReadAsArray()
-        print(base.shape)
-
-        # Crop the image to [1000x1000] pixels and save it as test_cd.tif
-        base = base[:, -500:, -500:]
-        print(base.shape)
-        # Save the image
-
-        filepath_aux = f'{self._io.config.base_local_dir}/testing/test_cd_aux.tif'
-        filepath = f'{self._io.config.base_local_dir}/testing/test_cd.tif'
-
-        # Save an auxiliary .tif file
-        driver = gdal.GetDriverByName('GTiff')
-        n_bands, rows, cols = base.shape
-        dataset = driver.Create(filepath_aux, cols, rows, n_bands, gdal.GDT_Float32)
-        for i in range(n_bands):
-            band = dataset.GetRasterBand(i + 1)
-            if i == 0:
-                band.SetNoDataValue(np.nan)
-            band.WriteArray(base[i])
-        dataset.FlushCache()
-        dataset = None
-
-        # Use gdal translate to compress the image using LZW
-        gdal.Translate(filepath, filepath_aux, options='-co COMPRESS=LZW')
-
-    def experiments(self):
-        data = self.load_image(2)
-
-        print(f'Applying CD to {data.shape} array.')
-
-        # self.bfast_cd(data)
-        self.ruptures_cd(data)
-
-    def ruptures_cd(self, data):
-        """
-        According to documentation:
-        penalty value: "As a rule of thumb, the more noise, samples or dimensions, the larger this parameter should be."
-        bic = sigma*sigma*np.log(T)*d gives also a starting value for the penalty
-        """
-        # Get image dimensions
-        n_images, n_bands, rows, cols = data.shape
-
-        res = np.ndarray(shape=(rows, cols), dtype=object)
-        total_pixels = rows * cols
-        for i in range(rows):
-            for j in range(cols):
-                if i % 100 == 0 and j % 100 == 0:
-                    print(f'Processed {i * cols + j} / {total_pixels} pixels.')
-
-                ts = data[:, :, i, j]
-                algo = rpt.Pelt(model="rbf").fit(ts)
-                result = algo.predict(pen=0.1)
-                # Save to res
-                res[i, j] = str(result)
-
-        print(res)
-
-    def load_image(self, extra_images=1):
-        base = gdal.Open(f'{self._io.config.base_local_dir}/testing/test_cd.tif').ReadAsArray()
-        # Take only first band
-        # base = base[0]
-        # Create random image of size 7849 * 3463
-        base = np.random.rand(4, 7849, 3463)
-        base = np.expand_dims(base, axis=0)
-        data = base.copy()
-        for i in range(extra_images):
-            # if i == 5:
-            #     base[0, 0, 0] = 100
-            data = np.concatenate((data, base), axis=0)
-
-        return data
-
-    def create_and_number_subdivisions(self):
-        subtiles = {}
-        for tile in self._io.config.available_tiles:
-            image = ImageRef(reference_nci_images[tile], 2020, tile, 'NDVI_reconstructed', 'nci')
-            # self._io.download_file(image)
-            base = gdal.Open(f'{self._io.config.base_local_dir}/{image.rel_filepath()}').ReadAsArray()
-            print(f'tile: {tile}\nImage shape: {base.shape}')
-            original_pix = base.shape[1] * base.shape[2]
-
-            ilim = 0
-            pixel_count = 0
-            sub_count = 0
-            while ilim < base.shape[1]:
-                ilim += 1000
-                jlim = 0
-                while jlim < base.shape[2]:
-                    jlim += 1000
-                    name = f'{tile}_{sub_count}'
-                    subtiles[name] = [ilim - 1000, ilim, jlim - 1000, jlim]
-                    # print(f'[{ilim-1000}:{ilim}, {jlim-1000}:{jlim}]')
-                    # print(f'This gives an image of size: {base[:, ilim-1000:ilim, jlim-1000:jlim].shape}')
-                    pixel_count += base[:, ilim - 1000:ilim, jlim - 1000:jlim].shape[1] * \
-                                   base[:, ilim - 1000:ilim, jlim - 1000:jlim].shape[2]
-                    sub_count += 1
-
-            assert pixel_count == original_pix, f'Pixel count does not match. Original: {original_pix}, new: {pixel_count}'
-
-        print(subtiles)
-
-
-if __name__ == '__main__':
-    config = Config()
-    io_config = IOConfig()
-    io_manager = IO(io_config)
-
-    cd = ChangeDetection(config, io_manager)
-    # cd.create_test_image()
-    cd.experiments()
-    # cd.create_and_number_subdivisions()

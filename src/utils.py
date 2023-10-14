@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Union
 
 RECORDS_FILE_COLUMNS = ['from', 'to', 'tile', 'year', 'product', 'timestamp', 'filename_from', 'filename_to', 'success']
-RECORDS_CD_FILE_COLUMNS = ['cd_id', 'threshold', 'tile', 'filename_from', 'filename_to', 'detected_events', 'timestamp']
+RECORDS_CD_FILE_COLUMNS = ['cd_id', 'threshold', 'tile', 'year', 'filename_from', 'filename_to', 'detected_events', 'timestamp']
 RESULTS_CD_FILE_COLUMNS = ['cd_id', 'threshold', 'tile', 'i', 'j', 'detected_breakpoint', 'd_prob', 'timestamp']
 IMAGE_TYPES = ['raw', 'crop', 'nci', 'testing', 'ground_truth', 'delta', 'cprob']
 
