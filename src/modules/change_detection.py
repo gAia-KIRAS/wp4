@@ -85,8 +85,8 @@ class ChangeDetection(Module):
         start_timestamp, start_time = timestamp(), time.time()
         i = 0
         while i < len(cd_todo) and time.time() - start_time < self._time_limit * 60:
-            print(f' -- Processing image {i + 1} of {len(cd_todo)}. {time.time() - start_time} seconds elapsed.'
-                  f'\n ---- Image name: {cd_todo[i][1]}')
+            print(f' -- Processing image {i + 1} of {len(cd_todo)}. {round((time.time() - start_time) / 60, 1)} '
+                  f'min elapsed.\n ---- Image name: {cd_todo[i][1]}')
             tile, filename, year = cd_todo[i]
             image_delta = ImageRef(filename, year, tile, 'NDVI_reconstructed', type='delta')
             image_cprob = ImageRef(filename.replace('delta', 'cprob'), tile_ref=image_delta.tile_ref, type='cprob')
