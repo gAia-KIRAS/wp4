@@ -8,7 +8,7 @@ from config.config import Config
 from io_manager.io_manager import IO
 from config.io_config import IOConfig
 from modules.abstract_module import Module
-from utils import ImageRef, subtiles, reference_nci_images, timestamp
+from utils import ImageRef, reference_nci_images, timestamp
 import numpy as np
 
 

@@ -8,7 +8,7 @@ from config.config import Config
 from io_manager.io_manager import IO
 from config.io_config import IOConfig
 from modules.abstract_module import Module
-from utils import ImageRef, subtiles, reference_nci_images, timestamp, RECORDS_FILE_COLUMNS, RAW_IMAGE_SIZES, \
+from utils import ImageRef, reference_nci_images, timestamp, RECORDS_FILE_COLUMNS, RAW_IMAGE_SIZES, \
     CROP_IMAGE_LIMITS, rename_product
 import numpy as np
 

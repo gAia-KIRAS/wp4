@@ -93,6 +93,7 @@ def search_sequence_numpy(arr, seq):
 
 def get_min_max_row_col(raster):
     r = raster.copy()
+
     # Study the r_1_crop image to identify the crop. The values outside the crop are nan.
 
     # Define function that returns one if all values in the array are nan, and zero otherwise
@@ -114,13 +115,73 @@ def get_min_max_row_col(raster):
     return j_max, j_min, i_max, i_min
 
 
+def g(tile):
+    config = Config()
+    io_config = IOConfig()
+    io = IO(io_config)
+
+    tile_ref = TileRef(2020, tile, 'NDVI_reconstructed')
+    crop_ref = ImageRef('crop_NDVIrec_2020_33TUM_20200101.tif', tile_ref=tile_ref, type='crop')
+    cprob_ref = ImageRef('cprob_NDVIrec_2020_33TUM_20200111.tif', tile_ref=tile_ref, type='cprob')
+
+    crop = io.load_tif_as_ndarray(crop_ref)
+    aux = io.load_tif_as_ndarray(cprob_ref)
+    original_shape = crop.shape
+
+    # Get dimensions from utils map
+    min_i, max_i, min_j, max_j = CROP_LIMITS_INSIDE_CROPPED.get(cprob_ref.tile)
+
+    # Create empty raster with the size of the original raster
+    raster = np.empty(original_shape, dtype=np.float32)
+    raster.fill(np.nan)
+
+    # Fill image with the cprob values
+    raster[min_i:max_i, min_j:max_j] = aux
+
+    assert raster.shape == crop.shape, 'Shape of raster and crop must be the same'
+
+    filepath_aux = r'C:\Users\jsalva\PycharmProjects\wp4\data\testing\test_NDVIrec_2020_33TUM_20200101_aux.tif'
+    filepath = r'C:\Users\jsalva\PycharmProjects\wp4\data\testing\test_NDVIrec_2020_33TUM_20200101.tif'
+
+    # Save raster with the same CRS as the crop raster using gdal
+    data = gdal.Open(f'{io_config.base_local_dir}/{crop_ref.rel_filepath()}', gdal.GA_ReadOnly)
+    srs = data.GetProjection()
+    geoTransform = data.GetGeoTransform()
+    minx = geoTransform[0]
+    maxy = geoTransform[3]
+    maxx = minx + geoTransform[1] * data.RasterXSize
+    miny = maxy + geoTransform[5] * data.RasterYSize
+    print([minx, miny, maxx, maxy])
+
+    if True:
+        # Write image
+        driver = gdal.GetDriverByName('GTiff')
+        n_bands, rows, cols = raster.shape if raster.ndim == 3 else (1, *raster.shape)
+        dataset = driver.Create(filepath_aux, cols, rows, n_bands, gdal.GDT_Float32)
+        dataset.SetProjection(srs)
+        dataset.SetGeoTransform(geoTransform)
+        for i in range(n_bands):
+            band = dataset.GetRasterBand(i + 1)
+            band.SetNoDataValue(np.nan)
+            band.WriteArray(raster[i]) if raster.ndim == 3 else band.WriteArray(raster)
+        dataset.FlushCache()
+        dataset = None
+
+        # Use gdal translate to compress the image using LZW
+        gdal.Translate(filepath, filepath_aux, options='-co COMPRESS=LZW')
+
+    return 0
+
+
 if __name__ == '__main__':
     """
     This is a script used for developing purposes. Won't be included in the final code and it is not relevant for the
     main pipeline
     """
 
-    f('33TUM')
+    # f('33TUM')
     # f('33TVM')
     # f('33TUN')
     # f('33TVN')
+    #
+    g('33TUM')
