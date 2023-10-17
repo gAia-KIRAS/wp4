@@ -36,7 +36,6 @@ class ChangeComputation(Module):
         # Update parameters
         self._on_the_server = on_the_server
         self._cd_id = self._config.cd_conf['cd_id']
-        self._pelt_penalty = self._config.cd_conf['penalty']
 
         # Check filters
         assert not (set(self._config.filters['product']) - {'NDVI_reconstructed'}), \

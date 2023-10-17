@@ -4,7 +4,7 @@ from typing import Union
 
 RECORDS_FILE_COLUMNS = ['from', 'to', 'tile', 'year', 'product', 'timestamp', 'filename_from', 'filename_to', 'success']
 RECORDS_CD_FILE_COLUMNS = ['cd_id', 'threshold', 'tile', 'year', 'filename_from', 'filename_to', 'detected_events', 'timestamp']
-RESULTS_CD_FILE_COLUMNS = ['cd_id', 'threshold', 'tile', 'i', 'j', 'detected_breakpoint', 'd_prob', 'timestamp']
+RESULTS_CD_FILE_COLUMNS = ['cd_id', 'threshold', 'tile', 'year', 'i', 'j', 'detected_breakpoint', 'd_prob', 'timestamp', 'lat', 'lon']
 IMAGE_TYPES = ['raw', 'crop', 'nci', 'testing', 'ground_truth', 'delta', 'cprob']
 
 RAW_IMAGE_SIZES = {
@@ -12,6 +12,12 @@ RAW_IMAGE_SIZES = {
     '33TUN': (10980, 10980),
     '33TVM': (10980, 10980),
     '33TVN': (10980, 10980),
+}
+CROP_IMAGE_SIZES = {
+    '33TUM': (6139, 18280),
+    '33TUN': (6139, 18280),
+    '33TVM': (6139, 18280),
+    '33TVN': (6139, 18280),
 }
 CROP_IMAGE_LIMITS = {  # (i_min, i_max, j_min, j_max)
     '33TUM': (0, 3463, 3131, 10980),
@@ -27,10 +33,10 @@ CROP_LIMITS_INSIDE_CROPPED = {  # (i_min, i_max, j_min, j_max)
 }
 
 reference_crop_images = {
-    '33TVM': "crop_NDVIraw_2021_33TVM_20210105.tif",
-    '33TUN': "crop_NDVIraw_2021_33TUN_20210103.tif",
-    '33TUM': "crop_NDVIraw_2021_33TUM_20210105.tif",
-    '33TVN': "crop_NDVIraw_2021_33TVN_20210105.tif",
+    '33TVM': "crop/2021/33TVM/NDVI_raw/crop_NDVIraw_2021_33TVM_20210105.tif",
+    '33TUN': "crop/2021/33TUN/NDVI_raw/crop_NDVIraw_2021_33TUN_20210103.tif",
+    '33TUM': "crop/2021/33TUM/NDVI_raw/crop_NDVIraw_2021_33TUM_20210105.tif",
+    '33TVN': "crop/2021/33TVN/NDVI_raw/crop_NDVIraw_2021_33TVN_20210105.tif",
 }
 
 reference_nci_images = {
@@ -147,7 +153,6 @@ class ImageRef:
             raise Exception(f'Could not extract date. '
                             f'Filename: {self.filename}, type: {self.type}, extracted date: {date}')
         return date
-
 
 @dataclass
 class FakeTFTypeHints:

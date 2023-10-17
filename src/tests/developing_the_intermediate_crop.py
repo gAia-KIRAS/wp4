@@ -3,7 +3,7 @@ from config.io_config import IOConfig
 from io_manager.io_manager import IO
 from modules.nci import NCI
 from utils import TileRef
-import gdal
+from osgeo import osr, ogr, gdal
 from utils import *
 import numpy as np
 
@@ -147,13 +147,7 @@ def g(tile):
     data = gdal.Open(f'{io_config.base_local_dir}/{crop_ref.rel_filepath()}', gdal.GA_ReadOnly)
     srs = data.GetProjection()
     geoTransform = data.GetGeoTransform()
-    minx = geoTransform[0]
-    maxy = geoTransform[3]
-    maxx = minx + geoTransform[1] * data.RasterXSize
-    miny = maxy + geoTransform[5] * data.RasterYSize
-    print([minx, miny, maxx, maxy])
-
-    if True:
+    if False:
         # Write image
         driver = gdal.GetDriverByName('GTiff')
         n_bands, rows, cols = raster.shape if raster.ndim == 3 else (1, *raster.shape)
@@ -169,6 +163,29 @@ def g(tile):
 
         # Use gdal translate to compress the image using LZW
         gdal.Translate(filepath, filepath_aux, options='-co COMPRESS=LZW')
+
+    def pixel_to_world(geo_matrix, x, y):
+        return x * geo_matrix[1] + geo_matrix[0], y * geo_matrix[5] + geo_matrix[3]
+
+    def build_transform_inverse(dataset, EPSG):
+        source = osr.SpatialReference(wkt=dataset.GetProjection())
+        target = osr.SpatialReference()
+        target.ImportFromEPSG(EPSG)
+        return osr.CoordinateTransformation(source, target)
+
+    def find_spatial_coordinate_from_pixel(dataset, transform, x, y):
+        world_x, world_y = pixel_to_world(dataset.GetGeoTransform(), x, y)
+        point = ogr.Geometry(ogr.wkbPoint)
+        point.AddPoint(world_x, world_y)
+        point.Transform(transform)
+        return point.GetX(), point.GetY()
+
+    _t = build_transform_inverse(data, 4326)
+    point = (min_j, min_i)
+    # point = (0, 0)
+    # point = CROP_IMAGE_SIZES.get(cprob_ref.tile)
+    coordinates = find_spatial_coordinate_from_pixel(data, _t, point[0], point[1])
+    print(coordinates)
 
     return 0
 

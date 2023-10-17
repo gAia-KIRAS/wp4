@@ -448,7 +448,8 @@ class IO:
 
     def save_results_cd(self, results_cd: pd.DataFrame):
         assert set(results_cd.columns) == set(RESULTS_CD_FILE_COLUMNS), \
-            f'Columns of records file must be {RESULTS_CD_FILE_COLUMNS}'
+            (f'Columns of records file must be {RESULTS_CD_FILE_COLUMNS}'
+             f'Columns of records file are {results_cd.columns}')
         results_cd.to_csv(self._config.results_cd_path, index=False)
 
     @staticmethod
@@ -590,13 +591,17 @@ class IO:
 
         sftp.close()
 
-    def save_ndarray_as_tif(self, data: np.ndarray, image_ref: ImageRef) -> None:
+    def save_ndarray_as_tif(self, data: np.ndarray, image_ref: ImageRef, crs: str = None, geotransform: tuple = None,
+                            no_data_val: Any = None) -> None:
         """
         Save a numpy array as a .tif file on the local machine. If it already exists, throw a warning but overwrite it.
 
         Args:
             data: numpy array with the data to save. Must have shape (n_bands, rows, cols)
             image_ref: ImageRef object with the reference to the image to save
+            crs: string with the crs of the image
+            geotransform: tuple with the geotransform of the image
+            no_data_val: value to use as no data value
 
         """
         # Set directories and filepaths
@@ -616,8 +621,14 @@ class IO:
         driver = gdal.GetDriverByName('GTiff')
         n_bands, rows, cols = data.shape if data.ndim == 3 else (1, *data.shape)
         dataset = driver.Create(filepath_aux, cols, rows, n_bands, gdal.GDT_Float32)
+        if crs is not None:
+            dataset.SetProjection(crs)
+        if geotransform is not None:
+            dataset.SetGeoTransform(geotransform)
         for i in range(n_bands):
             band = dataset.GetRasterBand(i + 1)
+            if no_data_val is not None:
+                band.SetNoDataValue(no_data_val)
             band.WriteArray(data[i]) if data.ndim == 3 else band.WriteArray(data)
         dataset.FlushCache()
         dataset = None

@@ -2,13 +2,12 @@ import time
 from typing import Tuple
 
 import pandas as pd
-from osgeo import gdal
-import ruptures as rpt
+from osgeo import osr, ogr, gdal
 from config.config import Config
 from io_manager.io_manager import IO
 from config.io_config import IOConfig
 from modules.abstract_module import Module
-from utils import ImageRef, reference_nci_images, timestamp
+from utils import ImageRef, CROP_IMAGE_SIZES, CROP_LIMITS_INSIDE_CROPPED, reference_crop_images, timestamp
 import numpy as np
 
 
@@ -47,6 +46,66 @@ class ChangeDetection(Module):
         self._on_the_server = None
         self._cd_id = None
         self._threshold = None
+
+        self._reference_images = {
+            tile: gdal.Open(f'{self._io.config.base_local_dir}/{reference_crop_images[tile]}')
+            for tile in self._io.config.available_tiles
+        }
+
+        self._spatial_info_crop_images = {
+            tile: (self._reference_images[tile].GetProjection(),
+                   self._reference_images[tile].GetGeoTransform(),
+                   self._build_transform_inverse(self._reference_images[tile]))
+            for tile in self._io.config.available_tiles
+        }
+
+    @staticmethod
+    def _build_transform_inverse(reference_image: gdal.Dataset) -> osr.CoordinateTransformation:
+        """
+        Builds the inverse transformation from the reference image to the original image.
+        Args:
+            reference_image: reference image
+
+        Returns:
+            inverse transformation
+        """
+        source = osr.SpatialReference(wkt=reference_image.GetProjection())
+        target = osr.SpatialReference()
+        target.ImportFromEPSG(4326)
+        transform = osr.CoordinateTransformation(source, target)
+        return transform
+
+    def pixel_to_latlon(self, tile, i, j) -> Tuple[float, float]:
+        """
+        Find the lat and lon coordinates of the pixel (i, j) in the original image.
+
+        Args:
+            tile: tile ID
+            i: row index of the pixel
+            j: column index of the pixel
+
+        Returns:
+            tuple: lat and lon coordinates of the pixel
+        """
+        world_j, world_i = self.pixel_to_world(tile, i, j)
+        point = ogr.Geometry(ogr.wkbPoint)
+        point.AddPoint(world_j, world_i)
+        point.Transform(self._spatial_info_crop_images[tile][2])
+        return point.GetX(), point.GetY()
+
+    def pixel_to_world(self, tile, i, j) -> Tuple[float, float]:
+        """
+        Transforms the pixel coordinates to world coordinates using the reference image.
+        Args:
+            tile: tile ID
+            i: row index of the pixel
+            j: column index of the pixel
+
+        Returns:
+            j and i coordinates of the pixel in the world coordinates
+        """
+        geo_matrix = self._spatial_info_crop_images[tile][1]
+        return j * geo_matrix[1] + geo_matrix[0], i * geo_matrix[5] + geo_matrix[3]
 
     def run(self, on_the_server: bool = False) -> None:
         # Update parameters
@@ -165,8 +224,19 @@ class ChangeDetection(Module):
         # Save the c_prob.tif file
         c_prob_filename = f'{delta_imref.filename.replace("delta", "cprob")}'
 
-        c_prob_imref = ImageRef(c_prob_filename, tile_ref=delta_imref.tile_ref, type='cprob')
-        self._io.save_ndarray_as_tif(c_prob, c_prob_imref)
+        # Save image of size = crop image
+        cprob_imref = ImageRef(c_prob_filename, tile_ref=delta_imref.tile_ref, type='cprob')
+
+        raster_shape = CROP_IMAGE_SIZES[cprob_imref.tile]
+        raster = np.empty(raster_shape, dtype=np.float32)
+        raster.fill(np.nan)
+        min_i, max_i, min_j, max_j = CROP_LIMITS_INSIDE_CROPPED.get(cprob_imref.tile)
+
+        raster[min_i:max_i, min_j:max_j] = c_prob
+        del c_prob
+
+        crs, geotransform, _ = self._spatial_info_crop_images[delta_imref.tile_ref.tile]
+        self._io.save_ndarray_as_tif(raster, cprob_imref, crs=crs, geotransform=geotransform)
 
     def add_results(self, image_ref: ImageRef, detected_events: list, date: str) -> None:
         """
@@ -180,14 +250,17 @@ class ChangeDetection(Module):
         new_records = {
             'i': [i for (i, j), prob in detected_events],
             'j': [j for (i, j), prob in detected_events],
-            'd_prob': [prob for (i, j), prob in detected_events]
+            'd_prob': [prob for _, prob in detected_events]
         }
         new_records = pd.DataFrame(new_records)
         new_records['cd_id'] = self._cd_id
         new_records['threshold'] = self._threshold
         new_records['tile'] = image_ref.tile
+        new_records['year'] = image_ref.year
         new_records['detected_breakpoint'] = date
         new_records['timestamp'] = timestamp()
+        new_records[['lat', 'lon']] = new_records.apply(
+            lambda row: self.pixel_to_latlon(image_ref.tile, row['i'], row['j']), axis=1, result_type='expand')
 
         self._cd_results = pd.concat([self._cd_results, new_records], ignore_index=True).reset_index(drop=True)
 
