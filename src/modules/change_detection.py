@@ -11,6 +11,8 @@ from utils import ImageRef, CROP_IMAGE_SIZES, CROP_LIMITS_INSIDE_CROPPED, refere
 import numpy as np
 import os
 
+os.environ['PROJ_LIB'] = '/home/salva/miniconda3/envs/wp4_env/share/proj'
+
 
 class ChangeDetection(Module):
     """
@@ -112,8 +114,6 @@ class ChangeDetection(Module):
     def run(self, on_the_server: bool = False) -> None:
         # Update parameters
         self._on_the_server = on_the_server
-        if self._on_the_server:
-            os.environ['PROJ_LIB'] = '/home/salva/miniconda3/envs/wp4_env/share/proj'
         self._cd_id = self._config.cd_conf['cd_id']
         self._threshold = self._config.cd_conf['threshold']
 
