@@ -9,6 +9,7 @@ from config.io_config import IOConfig
 from modules.abstract_module import Module
 from utils import ImageRef, CROP_IMAGE_SIZES, CROP_LIMITS_INSIDE_CROPPED, reference_crop_images, timestamp
 import numpy as np
+import os
 
 
 class ChangeDetection(Module):
@@ -69,7 +70,7 @@ class ChangeDetection(Module):
         Returns:
             inverse transformation
         """
-        print('f -- Building inverse transformation')
+        print(' -- Building inverse transformation')
         source = osr.SpatialReference(wkt=reference_image.GetProjection())
         target = osr.SpatialReference()
         target.ImportFromEPSG(4326)
@@ -111,6 +112,8 @@ class ChangeDetection(Module):
     def run(self, on_the_server: bool = False) -> None:
         # Update parameters
         self._on_the_server = on_the_server
+        if self._on_the_server:
+            os.environ['PROJ_LIB'] = '/home/salva/miniconda3/envs/wp4_env/share/proj'
         self._cd_id = self._config.cd_conf['cd_id']
         self._threshold = self._config.cd_conf['threshold']
 
