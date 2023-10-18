@@ -46,12 +46,12 @@ class ChangeDetection(Module):
         self._on_the_server = None
         self._cd_id = None
         self._threshold = None
-
+        print(f'Loading reference images')
         self._reference_images = {
             tile: gdal.Open(f'{self._io.config.base_local_dir}/{reference_crop_images[tile]}')
             for tile in self._io.config.available_tiles
         }
-
+        print(f'Building spatial info for reference images')
         self._spatial_info_crop_images = {
             tile: (self._reference_images[tile].GetProjection(),
                    self._reference_images[tile].GetGeoTransform(),
@@ -69,6 +69,7 @@ class ChangeDetection(Module):
         Returns:
             inverse transformation
         """
+        print('f -- Building inverse transformation')
         source = osr.SpatialReference(wkt=reference_image.GetProjection())
         target = osr.SpatialReference()
         target.ImportFromEPSG(4326)
