@@ -40,6 +40,14 @@ class IOConfig:
             for aoi_ext in self._inv_extensions
         }
 
+        self._inventory_poly_rel_path = {
+            aoi_ext: self._config['files']["inventory_poly_" + aoi_ext] for aoi_ext in self._inv_extensions
+        }
+        self._inventory_poly_path = {
+            aoi_ext: os.path.join(self._base_local_dir, self._inventory_poly_rel_path[aoi_ext])
+            for aoi_ext in self._inv_extensions
+        }
+
         self._records_path = os.path.join(self._base_local_dir, self._config['files']['records'])
         self._records_cd_path = os.path.join(self._base_local_dir, self._config['files']['records_cd'])
         self._results_cd_path = os.path.join(self._base_local_dir, self._config['files']['results_cd'])
@@ -112,6 +120,14 @@ class IOConfig:
     @property
     def inventory_rel_path(self) -> Dict[str, str]:
         return self._inventory_rel_path
+
+    @property
+    def inventory_poly_path(self) -> Dict[str, str]:
+        return self._inventory_poly_path
+
+    @property
+    def inventory_poly_rel_path(self) -> Dict[str, str]:
+        return self._inventory_poly_rel_path
 
     @property
     def records_path(self) -> str:

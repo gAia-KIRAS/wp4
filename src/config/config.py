@@ -20,11 +20,10 @@ class Config:
         self._filters = self._config['execute']['filters']
         self._execute_where = self._config['execute']['where']
 
-        # NCI parameters
+        # Module parameters
         self._nci_conf = self._config['nci']
-
-        # CD parameters
         self._cd_conf = self._config['cd']
+        self._eval_conf = self._config['eval']
 
     def load_config(self) -> dict:
         with open(self._config_path) as f:
@@ -47,6 +46,10 @@ class Config:
     @property
     def cd_conf(self) -> dict:
         return self._cd_conf
+
+    @property
+    def eval_conf(self) -> dict:
+        return self._eval_conf
 
     @property
     def execute(self) -> str:
