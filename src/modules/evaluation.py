@@ -10,6 +10,8 @@ class Evaluation(Module):
         self._cd_id = self._config.eval_conf['cd_id']
         self._results = self._io.get_results_cd()
 
+        self._tile_filters = self._config.filters['tile']
+
         self._CRS = 4326
 
         # Some general time limits. Will be filtered in detail when merging with the results
@@ -62,8 +64,7 @@ class Evaluation(Module):
                                agg({'y': 'max'}))
 
         # Merge results
-        # Create empty with columns detected_breakpoint, lat, lon
-        eval_df = results[['detected_breakpoint', 'lat', 'lon']].drop_duplicates()
+        eval_df = results[['detected_breakpoint', 'lat', 'lon', 'year', 'tile']].drop_duplicates()
         if self._config.eval_conf['type'] != 'polygons':
             eval_df = eval_df.merge(results_gt[['detected_breakpoint', 'lat', 'lon', 'y']].rename(
                 columns={'y': 'y_points'}), on=['detected_breakpoint', 'lat', 'lon'], how='left')
@@ -80,7 +81,6 @@ class Evaluation(Module):
             eval_df['y'] = eval_df['y_points'] + eval_df['y_poly']
             eval_df['y'] = eval_df['y'].fillna(0)
 
-        # Calculate the number of true positives, false positives, true negatives, false negatives
         tp = len(eval_df[eval_df['y'] == 1])
         fp = len(results) - tp
 
@@ -93,15 +93,38 @@ class Evaluation(Module):
         --------------------
         True positives: {tp}
         False positives: {fp}
-        
+
         Precision: {precision}
         """)
+
+        # Calculate the number of true positives and false positives by year and tile
+
+        years = results['year'].unique()
+        tiles = results['tile'].unique()
+        tp, fp, prec = {}, {}, {}
+        for year in years:
+            for tile in tiles:
+                tp[(year, tile)] = len(eval_df[(eval_df['y'] == 1) & (eval_df['year'] == year) &
+                                               (eval_df['tile'] == tile)])
+                fp[(year, tile)] = len(results[(results['year'] == year) & (results['tile'] == tile)]) - tp[(year, tile)]
+                prec[(year, tile)] = tp[(year, tile)] / (tp[(year, tile)] + fp[(year, tile)])
+
+        # Build the dataframe year, tile, tp, fp, precision
+        disaggregated_res = pd.DataFrame({'year': [y for y in years for _ in tiles],
+                                'tile': [t for _ in years for t in tiles],
+                                'tp': [tp[(y, t)] for y in years for t in tiles],
+                                'fp': [fp[(y, t)] for y in years for t in tiles],
+                                'precision': [prec[(y, t)] for y in years for t in tiles]}).sort_values(['year', 'tile'])
+        print(disaggregated_res)
 
         return 0
 
     def _prepare_results(self):
         results = self._results[self._results['cd_id'] == self._cd_id]
-        results = results[['detected_breakpoint', 'lat', 'lon', 'd_prob']].sort_values(by='d_prob', ascending=False)
+        results = results[['detected_breakpoint', 'lat', 'lon', 'd_prob', 'year', 'tile']].sort_values(
+            by='d_prob', ascending=False)
+        if self._tile_filters:
+            results = results[results['tile'].isin(self._tile_filters)]
         results['detected_breakpoint'] = pd.to_datetime(results['detected_breakpoint'], format='%Y%m%d')
         assert len(results) > 0, f'No results found for cd_id {self._cd_id}'
 
