@@ -49,6 +49,7 @@ class ChangeDetection(Module):
         self._on_the_server = None
         self._cd_id = None
         self._threshold = None
+        self._type = None
         print(f'Loading reference images')
         self._reference_images = {
             tile: gdal.Open(f'{self._io.config.base_local_dir}/{reference_crop_images[tile]}')
@@ -116,6 +117,7 @@ class ChangeDetection(Module):
         self._on_the_server = on_the_server
         self._cd_id = self._config.cd_conf['cd_id']
         self._threshold = self._config.cd_conf['threshold']
+        self._type = self._config.cd_conf['type']
 
         # Check filters
         assert not (set(self._config.filters['product']) - {'NDVI_reconstructed'}), \
@@ -214,16 +216,22 @@ class ChangeDetection(Module):
 
         n_bands = delta.shape[0]
         delta[np.isnan(delta)] = 0
-        for b in range(n_bands):
-            # Clip with the 5th and 95th percentiles
-            v_min, v_max = np.percentile(delta[b, :, :], [5, 95])
-            delta[b, :, :] = np.clip(delta[b, :, :], v_min, v_max)
 
-            # Normalize to [0, 1]
-            delta[b, :, :] = (delta[b, :, :] - v_min) / (v_max - v_min)
+        if self._type in ['basic_mean', 'nci_logic']:
+            for b in range(n_bands):
+                # Clip with the 5th and 95th percentiles
+                v_min, v_max = np.percentile(delta[b, :, :], [5, 95])
+                delta[b, :, :] = np.clip(delta[b, :, :], v_min, v_max)
 
-        # Average the bands 0 (correlation), 3 (pixel vs average), 4 (ndvi differences)
-        c_prob = np.mean(delta[[0, 3, 4], :, :], axis=0)
+                # Normalize to [0, 1]
+                delta[b, :, :] = (delta[b, :, :] - v_min) / (v_max - v_min)
+
+            # Average the bands 0 (correlation), 3 (pixel vs average), 4 (ndvi differences)
+            c_prob = np.mean(delta[[0, 3, 4], :, :], axis=0)
+
+        if self._type == 'nci_logic':
+            # Set all pixels with slope > 0 to c_prob = 0
+            c_prob[delta[1, :, :] < 0] = 0
 
         # Save the c_prob.tif file
         c_prob_filename = f'{delta_imref.filename.replace("delta", "cprob")}'
