@@ -37,8 +37,13 @@ class Evaluation(Module):
 
         return aoi
 
-    def run(self, on_the_server=False):
-        # Prepare results
+    def run(self, on_the_server: bool = False) -> None:
+        """
+        Runs the evaluation for the cd_id specified in the config.
+
+        Args:
+            on_the_server: whether execution is on the server or not
+        """
         results, n_before_filter = self._prepare_results()
 
         # Get min and max lat = y / lon = x
@@ -68,10 +73,17 @@ class Evaluation(Module):
         self.print_general_results(detected_landslide_ids, fp, landslide_ids, precision, recall, tp)
         self.disaggregate_results(eval_df, results)
 
-        return 0
+    def disaggregate_results(self, eval_df, results) -> None:
+        """
+        Computes and displays precision and recall for every year and tile.
 
-    def disaggregate_results(self, eval_df, results):
-        # Calculate the number of true positives and false positives by year and tile
+        Args:
+            eval_df: table with the evaluation results
+            results: original table with predictions (not matched with ground truth)
+
+        Returns:
+
+        """
         years = results['year'].unique()
         tiles = results['tile'].unique()
         tp, fp, prec = {}, {}, {}
@@ -91,11 +103,26 @@ class Evaluation(Module):
             ['year', 'tile'])
         print(disaggregated_res)
 
-    def match_with_inventory(self, detected_landslide_ids, dim, landslide_ids, results):
+    def match_with_inventory(self, detected_landslide_ids, dim, landslide_ids, results) -> tuple:
+        """
+        Matches the predictions with the point-based inventory. Adds a column y to the results table.
+
+        Args:
+            detected_landslide_ids: ids of the landslides that were detected until now
+            dim: min and max longitude and latitude
+            landslide_ids: ids of the landslides in the inventory
+            results: table with the predictions
+
+        Returns:
+            detected_landslide_ids: updated ids of the landslides that were detected
+            landslide_ids: ids of the landslides in the inventory
+            results_gt: table with the predictions and the y column
+        """
         # Load inventory (ground truth)
         inventory = self._load_inventory(dim)
         landslide_ids += inventory['landslide_id'].unique().tolist()
         print(f'Loaded {len(inventory)} inventory entries for cd_id {self._cd_id}')
+
         # For every prediction, add 0 / 1 depending on whether there is a close match with the inventory
         results_gt = gpd.sjoin_nearest(results, inventory, how='left', distance_col='distance',
                                        max_distance=self._max_dist).sort_values(by='distance')
@@ -106,17 +133,33 @@ class Evaluation(Module):
         detected_landslide_ids += results_gt['landslide_id'].unique().tolist()
         detected_landslide_ids = [x for x in detected_landslide_ids if not np.isnan(x)]
         results_gt.drop_duplicates(subset=['lon', 'lat', 'detected_breakpoint'], inplace=True)
+
         # If there is no match, set y = 0
         results_gt['y'] = 0
         results_gt.loc[(results_gt['distance'] < self._max_dist) & (results_gt['date_distance'] <= 30) &
                        (results_gt['date_distance'] >= -30), 'y'] = 1
         return detected_landslide_ids, landslide_ids, results_gt
 
-    def match_with_polygon_inventory(self, detected_landslide_ids, dim, landslide_ids, results):
+    def match_with_polygon_inventory(self, detected_landslide_ids, dim, landslide_ids, results) -> tuple:
+        """
+        Matches the predictions with the polygon-based inventory. Adds a column y to the results table.
+
+        Args:
+            detected_landslide_ids: ids of the landslides that were detected until now
+            dim: min and max longitude and latitude
+            landslide_ids: ids of the landslides in the inventory
+            results: table with the predictions
+
+        Returns:
+            detected_landslide_ids: updated ids of the landslides that were detected
+            landslide_ids: ids of the landslides in the inventory
+            results_gt_poly: table with the predictions and the y column
+        """
         # Load polygon inventory
         inventory = self._load_polygon_inventory(dim)
         landslide_ids += inventory['landslide_id'].unique().tolist()
         print(f'Loaded {len(inventory)} inventory entries for cd_id {self._cd_id}')
+
         # For every prediction, add 0 / 1 depending on whether there is a close match with the inventory
         results_gt_poly = gpd.sjoin(results, inventory, how='left', predicate='intersects')
         results_gt_poly['y'] = 0
@@ -127,7 +170,18 @@ class Evaluation(Module):
                            agg({'y': 'max'}))
         return detected_landslide_ids, landslide_ids, results_gt_poly
 
-    def combine_results(self, results, results_gt, results_gt_poly):
+    def combine_results(self, results, results_gt, results_gt_poly) -> pd.DataFrame:
+        """
+        Combines the matches with point and polygon inventories: y = y_points + y_poly
+
+        Args:
+            results: original predictions
+            results_gt: predictions matches with point inventory
+            results_gt_poly: predictions matches with polygon inventory
+
+        Returns:
+            eval_df: table with the evaluation results
+        """
         # Merge results
         eval_df = results[['detected_breakpoint', 'lat', 'lon', 'year', 'tile']].drop_duplicates()
         if self._config.eval_conf['type'] != 'polygons':
@@ -146,7 +200,20 @@ class Evaluation(Module):
             eval_df['y'] = eval_df['y'].fillna(0)
         return eval_df
 
-    def calculate_results(self, detected_landslide_ids, eval_df, landslide_ids, results):
+    def calculate_results(self, detected_landslide_ids, eval_df, landslide_ids, results) -> tuple:
+        """
+        Calculates the evaluation results: tp, fp, precision, recall
+
+        Args:
+            detected_landslide_ids: list of ids of the landslides that were detected
+            eval_df: table with the evaluation results
+            landslide_ids: list of ids of the landslides in the inventory
+            results: original predictions
+
+        Returns:
+            fp, tp, precision, recall
+        """
+
         tp = len(eval_df[eval_df['y'] == 1])
         fp = len(results) - tp
         # Calculate the precision
@@ -155,7 +222,18 @@ class Evaluation(Module):
         recall = len(detected_landslide_ids) / len(landslide_ids)
         return fp, tp, precision, recall
 
-    def print_general_results(self, detected_landslide_ids, fp, landslide_ids, precision, recall, tp):
+    def print_general_results(self, detected_landslide_ids, fp, landslide_ids, precision, recall, tp) -> None:
+        """
+        Prints the general evaluation results.
+
+        Args:
+            detected_landslide_ids: list of ids of the landslides that were detected
+            tp:  number of true positives
+            fp: number of false positives
+            landslide_ids: list of ids of the landslides in the inventory
+            precision: precision of the predictions
+            recall: recall of the predictions
+        """
         print(f"""
         --------------------
         Evaluation Results
@@ -167,7 +245,15 @@ class Evaluation(Module):
         Recall: {round(recall, 3)} = {len(detected_landslide_ids)} / {len(landslide_ids)}
         """)
 
-    def _compute_baseline_evaluation(self, dim, n):
+    def _compute_baseline_evaluation(self, dim, n) -> None:
+        """
+        Compute baseline evaluation, which is the evaluation of n random predictions.
+        Print results to console.
+
+        Args:
+            dim: min and max longitude and latitude
+            n: number of random predictions to generate
+        """
         print(f'-------------------\nComputing baseline evaluation for cd_id {self._cd_id}\n-------------------\n')
         random_results = self.generate_random_results(dim, n)
 
@@ -194,7 +280,17 @@ class Evaluation(Module):
               f'End of baseline evaluation for cd_id {self._cd_id}'
               f'\n-------------------\n')
 
-    def generate_random_results(self, dim, n):
+    def generate_random_results(self, dim, n) -> pd.DataFrame:
+        """
+        Generates n random predictions.
+
+        Args:
+            dim: min and max longitude and latitude
+            n: number of random predictions to generate
+
+        Returns:
+            random_results: table with the random predictions. Same columns and format as the results table.
+        """
         # Generate n random predictions. Must be within dim. Date is random between 2018 and 2022
         random_results = pd.DataFrame({
             'detected_breakpoint': pd.date_range(start='2018-01-01', end='2022-12-31', periods=n),
@@ -213,7 +309,17 @@ class Evaluation(Module):
 
         return random_results
 
-    def _prepare_results(self):
+    def _prepare_results(self) -> tuple:
+        """
+        Loads the results for the cd_id specified in the config.
+        Filters according to the tile filters specified in the config.
+        Filters according to the area of interest but keep number of results before filtering.
+
+        Returns:
+            results: table with the results
+            n_before_filter: number of results before filtering by area of interest
+        """
+
         results = self._results[self._results['cd_id'] == self._cd_id]
 
         results = results[['detected_breakpoint', 'lat', 'lon', 'd_prob', 'year', 'tile']].sort_values(
@@ -238,6 +344,17 @@ class Evaluation(Module):
         return results, n_before_filter
 
     def _load_inventory(self, dim: dict):
+        """
+        Loads the inventory for the cd_id specified in the config.
+        Filter by type of landslide and by min and max latitude and longitude.
+        Filter by date (only keep entries between _date_start and _date_end).
+
+        Args:
+            dim: min and max longitude and latitude
+
+        Returns:
+            inventory: table with the inventory
+        """
         inventory = gpd.read_file(self._io.config.inventory_path['shp'])
         inventory.to_crs(self._CRS, inplace=True)
 
@@ -261,6 +378,17 @@ class Evaluation(Module):
         return inventory[(inventory.date >= self._date_start) & (inventory.date < self._date_end)]
 
     def _load_polygon_inventory(self, dim: dict):
+        """
+        Loads the polygon inventory for the cd_id specified in the config.
+        Filter by min and max latitude and longitude.
+        Filter by date (only keep entries between _date_start and _date_end).
+
+        Args:
+            dim: min and max longitude and latitude
+
+        Returns:
+
+        """
         inventory = gpd.read_file(self._io.config.inventory_poly_path['shp'])
         inventory.to_crs(self._CRS, inplace=True)
         inventory = inventory[['OBJECTID', 'DATUM_VON', 'geometry']].rename(
