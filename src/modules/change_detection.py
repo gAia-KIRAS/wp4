@@ -10,8 +10,8 @@ from modules.abstract_module import Module
 from utils import ImageRef, CROP_IMAGE_SIZES, CROP_LIMITS_INSIDE_CROPPED, reference_crop_images, timestamp
 import numpy as np
 
-import os
-os.environ['PROJ_LIB'] = '/home/salva/miniconda3/envs/wp4_env/share/proj'
+# import os
+# os.environ['PROJ_LIB'] = '/home/salva/miniconda3/envs/wp4_env/share/proj'
 
 
 class ChangeDetection(Module):
@@ -223,6 +223,9 @@ class ChangeDetection(Module):
                 v_min, v_max = np.percentile(delta[b, :, :], [5, 95])
                 delta[b, :, :] = np.clip(delta[b, :, :], v_min, v_max)
 
+                # Take mask of the pixels with slope > 0
+                mask = delta[1, :, :] > 0
+
                 # Normalize to [0, 1]
                 delta[b, :, :] = (delta[b, :, :] - v_min) / (v_max - v_min)
 
@@ -231,7 +234,7 @@ class ChangeDetection(Module):
 
         if self._type == 'nci_logic':
             # Set all pixels with slope > 0 to c_prob = 0
-            c_prob[delta[1, :, :] < 0] = 0
+            c_prob[mask] = 0
 
         # Save the c_prob.tif file
         c_prob_filename = f'{delta_imref.filename.replace("delta", "cprob")}'
