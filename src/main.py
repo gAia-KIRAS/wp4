@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import argparse
 
 from config.config import Config
-from modules.build_ground_truth import BuildGroundTruth
+from modules.build_train_dataset import BuildTrainDataset
 from modules.change_computation import ChangeComputation
 from modules.change_detection import ChangeDetection
 from modules.nci import NCI
@@ -46,10 +46,10 @@ if __name__ == "__main__":
     module = {
         'crop': IntersectAOI,
         'nci': NCI,
-        'ground_truth': BuildGroundTruth,
         'cd': ChangeDetection,
         'delta': ChangeComputation,
-        'eval': Evaluation
+        'eval': Evaluation,
+        'btds': BuildTrainDataset,
     }.get(config.execute, KeyError(f'{config.execute} is not a valid module.'))(config=config, io=io_manager)
 
     if args.server_execution:
