@@ -1,4 +1,5 @@
 import pandas as pd
+from osgeo import gdal
 
 from utils import ImageRef, RAW_IMAGE_SIZES, CROP_IMAGE_LIMITS
 from modules.abstract_module import Module
@@ -29,8 +30,7 @@ class BuildTrainDataset(Module):
             (raw_images_df['product'] == image_ref_nci.product) &
             (raw_images_df['filename'].str.contains(image_ref_nci.extract_date()))
             ].iloc[0]
-        image_ref_raw = ImageRef(raw_image.filename, raw_image.year, raw_image.tile, raw_image['product'],
-                                 type='raw')
+        image_ref_raw = ImageRef(raw_image.filename, raw_image.year, raw_image.tile, raw_image['product'], type='raw')
 
         # Download images:
         if not self._on_the_server:
@@ -40,7 +40,13 @@ class BuildTrainDataset(Module):
 
         nci = self._io.load_tif_as_ndarray(image_ref_nci)
         delta = self._io.load_tif_as_ndarray(image_ref_delta)
-        raw = self._io.load_tif_as_ndarray(image_ref_raw)
+
+        if self._on_the_server:
+            dir_raw = f'{self._io.build_remote_dir_for_image(image_ref_raw)}'
+            filepath_raw = f'{dir_raw}/{image_ref_raw.filename}'
+            raw = gdal.Open(filepath_raw).ReadAsArray()
+        else:
+            raw = self._io.load_tif_as_ndarray(image_ref_raw)
 
         # Crop raw image
         raw = self.crop_image(raw, image_ref_raw)
