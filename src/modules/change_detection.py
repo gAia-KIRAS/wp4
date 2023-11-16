@@ -59,7 +59,9 @@ class ChangeDetection(Module):
         self._spatial_info_crop_images = {
             tile: (self._reference_images[tile].GetProjection(),
                    self._reference_images[tile].GetGeoTransform(),
-                   self._build_transform_inverse(self._reference_images[tile]))
+                   self._build_transform_inverse(self._reference_images[tile]),
+                   self._build_transform(self._reference_images[tile]))
+
             for tile in self._io.config.available_tiles
         }
 
@@ -80,6 +82,23 @@ class ChangeDetection(Module):
         transform = osr.CoordinateTransformation(source, target)
         return transform
 
+    @staticmethod
+    def _build_transform(reference_image: gdal.Dataset) -> osr.CoordinateTransformation:
+        """
+        Builds the transformation from the original image to the reference image.
+        Args:
+            reference_image: reference image
+
+        Returns:
+            transformation
+        """
+        print(' -- Building transformation')
+        source = osr.SpatialReference()
+        source.ImportFromEPSG(4326)
+        target = osr.SpatialReference(wkt=reference_image.GetProjection())
+        transform = osr.CoordinateTransformation(source, target)
+        return transform
+
     def pixel_to_latlon(self, tile, i, j) -> Tuple[float, float]:
         """
         Find the lat and lon coordinates of the pixel (i, j) in the original image.
@@ -97,6 +116,38 @@ class ChangeDetection(Module):
         point.AddPoint(world_j, world_i)
         point.Transform(self._spatial_info_crop_images[tile][2])
         return point.GetX(), point.GetY()
+
+    def latlon_to_pixel(self, tile, lat, lon) -> Tuple[int, int]:
+        """
+        Find the pixel coordinates of the lat and lon coordinates in the original image.
+
+        Args:
+            tile: tile ID
+            lat: lat coordinate
+            lon: lon coordinate
+
+        Returns:
+
+        """
+        point = ogr.Geometry(ogr.wkbPoint)
+        point.AddPoint(lon, lat)
+        point.Transform(self._spatial_info_crop_images[tile][3])
+        world_j, world_i = point.GetX(), point.GetY()
+        return self.world_to_pixel(tile, world_i, world_j)
+
+    def world_to_pixel(self, tile, world_i, world_j) -> Tuple[int, int]:
+        """
+        Transforms the world coordinates to pixel coordinates using the reference image.
+        Args:
+            tile: tile ID
+            world_i: row index of the pixel
+            world_j: column index of the pixel
+
+        Returns:
+            i and j coordinates of the pixel in the pixel coordinates
+        """
+        geo_matrix = self._spatial_info_crop_images[tile][1]
+        return int((world_i - geo_matrix[3]) / geo_matrix[5]), int((world_j - geo_matrix[0]) / geo_matrix[1])
 
     def pixel_to_world(self, tile, i, j) -> Tuple[float, float]:
         """

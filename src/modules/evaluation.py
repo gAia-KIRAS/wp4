@@ -119,7 +119,7 @@ class Evaluation(Module):
             results_gt: table with the predictions and the y column
         """
         # Load inventory (ground truth)
-        inventory = self._load_inventory(dim)
+        inventory = self.load_inventory(dim)
         landslide_ids += inventory['landslide_id'].unique().tolist()
         print(f'Loaded {len(inventory)} inventory entries for cd_id {self._cd_id}')
 
@@ -156,7 +156,7 @@ class Evaluation(Module):
             results_gt_poly: table with the predictions and the y column
         """
         # Load polygon inventory
-        inventory = self._load_polygon_inventory(dim)
+        inventory = self.load_polygon_inventory(dim)
         landslide_ids += inventory['landslide_id'].unique().tolist()
         print(f'Loaded {len(inventory)} inventory entries for cd_id {self._cd_id}')
 
@@ -343,14 +343,14 @@ class Evaluation(Module):
 
         return results, n_before_filter
 
-    def _load_inventory(self, dim: dict):
+    def load_inventory(self, dim: dict = None):
         """
         Loads the inventory for the cd_id specified in the config.
         Filter by type of landslide and by min and max latitude and longitude.
         Filter by date (only keep entries between _date_start and _date_end).
 
         Args:
-            dim: min and max longitude and latitude
+            dim: min and max longitude and latitude. No filter if None.
 
         Returns:
             inventory: table with the inventory
@@ -364,8 +364,9 @@ class Evaluation(Module):
             columns={'OBJEKTID': 'landslide_id', 'EREIG_ZEIT': 'date'})
 
         # Filter by coordinates
-        inventory = inventory[(inventory.geometry.x >= dim['min_lon']) & (inventory.geometry.x <= dim['max_lon']) &
-                              (inventory.geometry.y >= dim['min_lat']) & (inventory.geometry.y <= dim['max_lat'])]
+        if dim:
+            inventory = inventory[(inventory.geometry.x >= dim['min_lon']) & (inventory.geometry.x <= dim['max_lon']) &
+                                  (inventory.geometry.y >= dim['min_lat']) & (inventory.geometry.y <= dim['max_lat'])]
 
         # Fix dates
         date1 = pd.to_datetime(inventory['date'], errors='coerce', format='%Y')
@@ -377,14 +378,14 @@ class Evaluation(Module):
 
         return inventory[(inventory.date >= self._date_start) & (inventory.date < self._date_end)]
 
-    def _load_polygon_inventory(self, dim: dict):
+    def load_polygon_inventory(self, dim: dict = None):
         """
         Loads the polygon inventory for the cd_id specified in the config.
         Filter by min and max latitude and longitude.
         Filter by date (only keep entries between _date_start and _date_end).
 
         Args:
-            dim: min and max longitude and latitude
+            dim: min and max longitude and latitude. No filter if None.
 
         Returns:
 
@@ -395,7 +396,8 @@ class Evaluation(Module):
             columns={'OBJECTID': 'landslide_id', 'DATUM_VON': 'date'})
 
         # Filter by coordinates (geometry object is a POLYGON)
-        inventory = inventory.cx[dim['min_lon']:dim['max_lon'], dim['min_lat']:dim['max_lat']]
+        if dim:
+            inventory = inventory.cx[dim['min_lon']:dim['max_lon'], dim['min_lat']:dim['max_lat']]
 
         # Fix dates
         inventory['date'] = pd.to_datetime(inventory['date'], format='%Y-%m-%d')
