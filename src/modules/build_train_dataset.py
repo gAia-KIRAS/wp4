@@ -1,3 +1,5 @@
+import time
+
 import pandas as pd
 from osgeo import gdal
 
@@ -11,7 +13,9 @@ class BuildTrainDataset(Module):
 
         self._on_the_server = None
 
-    def get_features_for_point(self, row, raw_images_df):
+        self._raw_images_df = self._io.filter_all_images(image_type='raw', filters={})
+
+    def get_features_for_point(self, row):
         i, j = row.i, row.j
         date = pd.to_datetime(row.detected_breakpoint, format='%Y-%m-%d')
         year = row.year
@@ -24,11 +28,11 @@ class BuildTrainDataset(Module):
         image_ref_nci = ImageRef(filepath_nci, year=year, tile=tile, product='NDVI_reconstructed', type='nci')
         image_ref_delta = ImageRef(filepath_delta, year=year, tile=tile, product='NDVI_reconstructed', type='delta')
 
-        raw_image = raw_images_df.loc[
-            (raw_images_df['year'] == image_ref_nci.year) &
-            (raw_images_df['tile'] == image_ref_nci.tile) &
-            (raw_images_df['product'] == image_ref_nci.product) &
-            (raw_images_df['filename'].str.contains(image_ref_nci.extract_date()))
+        raw_image = self._raw_images_df.loc[
+            (self._raw_images_df['year'] == image_ref_nci.year) &
+            (self._raw_images_df['tile'] == image_ref_nci.tile) &
+            (self._raw_images_df['product'] == image_ref_nci.product) &
+            (self._raw_images_df['filename'].str.contains(image_ref_nci.extract_date()))
             ].iloc[0]
         image_ref_raw = ImageRef(raw_image.filename, raw_image.year, raw_image.tile, raw_image['product'], type='raw')
 
@@ -82,11 +86,12 @@ class BuildTrainDataset(Module):
         return raster
 
     def run(self, on_the_server=False):
+        print(f'Starting {self.__class__.__name__}')
+        print(f'Start time: {pd.Timestamp.now()}')
+
         self._on_the_server = on_the_server
         train_inv_path = f'{self._io.config.base_local_dir}/operation_records/train_inv.csv'
         train_inv = pd.read_csv(train_inv_path)
-
-        raw_images_df = self._io.filter_all_images(image_type='raw', filters={})
 
         base_columns = ['i', 'j', 'year', 'tile', 'date', 'y']
         feature_names = [f'nci_{i}' for i in range(4)] + [f'delta_{i}' for i in range(5)] + ['raw']
@@ -95,10 +100,12 @@ class BuildTrainDataset(Module):
         # Iterate over dataset and get features
         for index, row in enumerate(train_inv.itertuples()):
             print(f'Processing {index} of {len(train_inv)}')
-            features = self.get_features_for_point(row, raw_images_df)
+            start_time = time.time()
+            features = self.get_features_for_point(row)
             new_row = pd.DataFrame([[row.i, row.j, row.year, row.tile, row.detected_breakpoint, row.y] + features],
                                    columns=base_columns + feature_names)
             df = pd.concat([df, new_row], ignore_index=True)
+            print(f' -- took {round(time.time() - start_time, 2)} seconds -- ')
 
         df.to_csv(f'{self._io.config.base_local_dir}/operation_records/train_features.csv', index=False)
 
