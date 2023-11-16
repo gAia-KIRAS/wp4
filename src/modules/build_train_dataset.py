@@ -1,7 +1,7 @@
 import pandas as pd
 from osgeo import gdal
 
-from utils import ImageRef, RAW_IMAGE_SIZES, CROP_IMAGE_LIMITS
+from utils import ImageRef, RAW_IMAGE_SIZES, CROP_IMAGE_LIMITS, CROP_LIMITS_INSIDE_CROPPED
 from modules.abstract_module import Module
 
 
@@ -51,6 +51,10 @@ class BuildTrainDataset(Module):
         # Crop raw image
         raw = self.crop_image(raw, image_ref_raw)
 
+        min_i, max_i, min_j, max_j = CROP_LIMITS_INSIDE_CROPPED.get(image_ref_raw.tile)
+        i -= min_i
+        j -= min_j
+
         # Get features
         nci_values = nci[:, i, j]
         delta_values = delta[:, i, j]
@@ -90,6 +94,8 @@ class BuildTrainDataset(Module):
 
         # Iterate over dataset and get features
         for index, row in enumerate(train_inv.itertuples()):
+            if index > 2:
+                break
             print(f'Processing {index} of {len(train_inv)}')
             features = self.get_features_for_point(row, raw_images_df)
             new_row = pd.DataFrame([[row.i, row.j, row.year, row.tile, row.y] + features],
