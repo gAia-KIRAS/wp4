@@ -88,7 +88,7 @@ class BuildTrainDataset(Module):
 
         raw_images_df = self._io.filter_all_images(image_type='raw', filters={})
 
-        base_columns = ['i', 'j', 'year', 'tile', 'y']
+        base_columns = ['i', 'j', 'year', 'tile', 'date', 'y']
         feature_names = [f'nci_{i}' for i in range(4)] + [f'delta_{i}' for i in range(5)] + ['raw']
         df = pd.DataFrame(columns=base_columns + feature_names)
 
@@ -98,7 +98,7 @@ class BuildTrainDataset(Module):
                 break
             print(f'Processing {index} of {len(train_inv)}')
             features = self.get_features_for_point(row, raw_images_df)
-            new_row = pd.DataFrame([[row.i, row.j, row.year, row.tile, row.y] + features],
+            new_row = pd.DataFrame([[row.i, row.j, row.year, row.tile, row.detected_breakpoint, row.y] + features],
                                    columns=base_columns + feature_names)
             df = pd.concat([df, new_row], ignore_index=True)
 
