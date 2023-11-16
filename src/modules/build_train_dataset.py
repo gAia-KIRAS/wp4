@@ -90,8 +90,6 @@ class BuildTrainDataset(Module):
 
         # Iterate over dataset and get features
         for index, row in enumerate(train_inv.itertuples()):
-            if index > 2:
-                continue
             print(f'Processing {index} of {len(train_inv)}')
             features = self.get_features_for_point(row, raw_images_df)
             new_row = pd.DataFrame([[row.i, row.j, row.year, row.tile, row.y] + features],
