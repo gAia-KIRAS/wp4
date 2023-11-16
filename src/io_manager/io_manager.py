@@ -490,11 +490,11 @@ class IO:
                 - tile: list of strings with the tiles to filter
         """
         images_df = self.list_all_files_of_type(image_type)[['year', 'tile', 'product', 'filename']]
-        if filters['product']:
+        if 'product' in filters and filters['product']:
             images_df = images_df.loc[images_df['product'].isin(filters['product'])]
-        if filters['year']:
+        if 'year' in filters and filters['year']:
             images_df = images_df.loc[images_df['year'].isin(filters['year'])]
-        if filters['tile']:
+        if 'tile' in filters and filters['tile']:
             images_df = images_df.loc[images_df['tile'].isin(filters['tile'])]
         return images_df
 

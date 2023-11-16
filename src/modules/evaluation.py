@@ -18,6 +18,7 @@ class Evaluation(Module):
 
         self._tile_filters = self._config.filters['tile']
         self._compute_baseline_eval = self._config.eval_conf['baseline_eval']
+        self._build_train_dataset = self._config.eval_conf['build_train_dataset']
 
         # Some general time limits. Will be filtered in detail when merging with the results
         self._date_start = '2018-01-01'
@@ -72,6 +73,16 @@ class Evaluation(Module):
         fp, tp, precision, recall = self.calculate_results(detected_landslide_ids, eval_df, landslide_ids, results)
         self.print_general_results(detected_landslide_ids, fp, landslide_ids, precision, recall, tp)
         self.disaggregate_results(eval_df, results)
+
+        if self._build_train_dataset:
+            self._build(eval_df)
+
+    def _build(self, eval_df) -> None:
+        df = pd.DataFrame(columns=['i', 'j', 'detected_breakpoint', 'lat', 'lon', 'year', 'tile', 'y'])
+        # Take 100 points with y = 1 and 100 points with y = 0
+        for y in [0, 1]:
+            df = pd.concat([df, eval_df[eval_df['y'] == y].sample(n=100, random_state=42)])
+        df.to_csv(f'{self._io.config.base_local_dir}/operation_records/train_inv.csv', index=False)
 
     def disaggregate_results(self, eval_df, results) -> None:
         """
@@ -166,7 +177,7 @@ class Evaluation(Module):
         results_gt_poly.loc[results_gt_poly['landslide_id'].notnull(), 'y'] = 1
         detected_landslide_ids += results_gt_poly['landslide_id'].unique().tolist()
         detected_landslide_ids = [x for x in detected_landslide_ids if not np.isnan(x)]
-        results_gt_poly = (results_gt_poly.groupby(['detected_breakpoint', 'lat', 'lon'], as_index=False).
+        results_gt_poly = (results_gt_poly.groupby(['i', 'j', 'detected_breakpoint', 'lat', 'lon'], as_index=False).
                            agg({'y': 'max'}))
         return detected_landslide_ids, landslide_ids, results_gt_poly
 
@@ -183,13 +194,13 @@ class Evaluation(Module):
             eval_df: table with the evaluation results
         """
         # Merge results
-        eval_df = results[['detected_breakpoint', 'lat', 'lon', 'year', 'tile']].drop_duplicates()
+        eval_df = results[['i', 'j', 'detected_breakpoint', 'lat', 'lon', 'year', 'tile']].drop_duplicates()
         if self._config.eval_conf['type'] != 'polygons':
-            eval_df = eval_df.merge(results_gt[['detected_breakpoint', 'lat', 'lon', 'y']].rename(
-                columns={'y': 'y_points'}), on=['detected_breakpoint', 'lat', 'lon'], how='left')
+            eval_df = eval_df.merge(results_gt[['i', 'j', 'detected_breakpoint', 'lat', 'lon', 'y']].rename(
+                columns={'y': 'y_points'}), on=['i', 'j', 'detected_breakpoint', 'lat', 'lon'], how='left')
         if self._config.eval_conf['type'] != 'points':
-            eval_df = eval_df.merge(results_gt_poly[['detected_breakpoint', 'lat', 'lon', 'y']].rename(
-                columns={'y': 'y_poly'}), on=['detected_breakpoint', 'lat', 'lon'], how='left')
+            eval_df = eval_df.merge(results_gt_poly[['i', 'j', 'detected_breakpoint', 'lat', 'lon', 'y']].rename(
+                columns={'y': 'y_poly'}), on=['i', 'j', 'detected_breakpoint', 'lat', 'lon'], how='left')
         # Create y column (y_points or y_poly)
         if self._config.eval_conf['type'] == 'points':
             eval_df['y'] = eval_df['y_points']
@@ -322,8 +333,10 @@ class Evaluation(Module):
 
         results = self._results[self._results['cd_id'] == self._cd_id]
 
-        results = results[['detected_breakpoint', 'lat', 'lon', 'd_prob', 'year', 'tile']].sort_values(
+        results = results[['i', 'j', 'detected_breakpoint', 'lat', 'lon', 'd_prob', 'year', 'tile']].sort_values(
             by='d_prob', ascending=False)
+        if not self._build_train_dataset:
+            results.drop(columns=['i', 'j'], inplace=True)
         if self._tile_filters:
             results = results[results['tile'].isin(self._tile_filters)]
         results['detected_breakpoint'] = pd.to_datetime(results['detected_breakpoint'], format='%Y%m%d')

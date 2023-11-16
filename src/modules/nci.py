@@ -157,7 +157,7 @@ class NCI(Module):
             -> ImageRef:
         """
         Saves the NCI locally. The NCI is saved according to the following rules:
-        - saved as a .tif file. Therefore, when loaded, it is an image with 3 channels
+        - saved as a .tif file. Therefore, when loaded, it is an image with 4 channels
         - the spatial reference system is the same as the one of the image
         - LZW compression is used
         - NCI for (image_1 -> image_2) will be saved in the directory of image_1
