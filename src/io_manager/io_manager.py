@@ -589,6 +589,14 @@ class IO:
         print(f'Copying {server_results_cd_path} to {local_results_cd_path}')
         sftp.get(server_results_cd_path, local_results_cd_path)
 
+        train_features_path = f'{self._config.base_server_dir}/wp4/operation_records/train_features.csv'
+        try:
+            self.check_existence_on_server(train_features_path, dir=False)
+            print(f'Copying {train_features_path} to {self._config.base_local_dir}/operation_records/train_features.csv')
+            sftp.get(train_features_path, f'{self._config.base_local_dir}/operation_records/train_features.csv')
+        except FileNotFoundError:
+            pass
+
         sftp.close()
 
     def save_ndarray_as_tif(self, data: np.ndarray, image_ref: ImageRef, crs: str = None, geotransform: tuple = None,
