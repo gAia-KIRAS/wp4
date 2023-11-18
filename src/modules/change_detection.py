@@ -11,8 +11,8 @@ from utils import ImageRef, CROP_IMAGE_SIZES, CROP_LIMITS_INSIDE_CROPPED, refere
 import numpy as np
 
 
-# import os
-# os.environ['PROJ_LIB'] = '/home/salva/miniconda3/envs/wp4_env/share/proj'
+import os
+os.environ['PROJ_LIB'] = '/home/salva/miniconda3/envs/wp4_env/share/proj'
 
 
 class ChangeDetection(Module):
