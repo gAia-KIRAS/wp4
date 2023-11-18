@@ -3,8 +3,10 @@ from datetime import datetime
 from typing import Union
 
 RECORDS_FILE_COLUMNS = ['from', 'to', 'tile', 'year', 'product', 'timestamp', 'filename_from', 'filename_to', 'success']
-RECORDS_CD_FILE_COLUMNS = ['cd_id', 'threshold', 'tile', 'year', 'filename_from', 'filename_to', 'detected_events', 'timestamp']
-RESULTS_CD_FILE_COLUMNS = ['cd_id', 'threshold', 'tile', 'year', 'i', 'j', 'detected_breakpoint', 'd_prob', 'timestamp', 'lat', 'lon']
+RECORDS_CD_FILE_COLUMNS = ['cd_id', 'threshold', 'tile', 'year', 'filename_from', 'filename_to', 'detected_events',
+                           'timestamp']
+RESULTS_CD_FILE_COLUMNS = ['cd_id', 'threshold', 'tile', 'year', 'i', 'j', 'detected_breakpoint', 'd_prob', 'timestamp',
+                           'lat', 'lon']
 IMAGE_TYPES = ['raw', 'crop', 'nci', 'testing', 'ground_truth', 'delta', 'cprob']
 
 RAW_IMAGE_SIZES = {
@@ -45,6 +47,9 @@ reference_nci_images = {
     '33TVM': 'nci3_NDVIrec_2020_33TVM_20200101.tif',
     '33TVN': 'nci3_NDVIrec_2020_33TVN_20200101.tif'
 }
+
+coefficients_log_reg = {'intercept': 0.050342878586550385, 'nci_0': 0.09228724922071369, 'nci_1': 0.06389867017590802, 'nci_2': -6.909563461222256e-05, 'nci_3': -0.003436187944866737, 'delta_0': 0.03473757739972183, 'delta_1': -0.012445055651254186, 'delta_2': 0.019858978907541493, 'delta_3': 0.013485552057842085, 'delta_4': 0.0042371712598931474}
+
 
 assert all([
     x[1] - x[0] == CROP_LIMITS_INSIDE_CROPPED[tile][1] - CROP_LIMITS_INSIDE_CROPPED[tile][0] and
@@ -153,6 +158,7 @@ class ImageRef:
             raise Exception(f'Could not extract date. '
                             f'Filename: {self.filename}, type: {self.type}, extracted date: {date}')
         return date
+
 
 @dataclass
 class FakeTFTypeHints:

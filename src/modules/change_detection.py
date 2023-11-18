@@ -5,10 +5,11 @@ import pandas as pd
 from osgeo import osr, ogr, gdal
 from config.config import Config
 from io_manager.io_manager import IO
-from config.io_config import IOConfig
 from modules.abstract_module import Module
-from utils import ImageRef, CROP_IMAGE_SIZES, CROP_LIMITS_INSIDE_CROPPED, reference_crop_images, timestamp
+from utils import ImageRef, CROP_IMAGE_SIZES, CROP_LIMITS_INSIDE_CROPPED, reference_crop_images, timestamp, \
+    coefficients_log_reg
 import numpy as np
+
 
 # import os
 # os.environ['PROJ_LIB'] = '/home/salva/miniconda3/envs/wp4_env/share/proj'
@@ -47,9 +48,10 @@ class ChangeDetection(Module):
         self._all_delta = self._io.list_all_files_of_type('delta')
 
         self._on_the_server = None
-        self._cd_id = None
-        self._threshold = None
-        self._type = None
+        self._cd_id = self._config.cd_conf['cd_id']
+        self._threshold = self._config.cd_conf['threshold']
+        self._type = self._config.cd_conf['type']
+
         print(f'Loading reference images')
         self._reference_images = {
             tile: gdal.Open(f'{self._io.config.base_local_dir}/{reference_crop_images[tile]}')
@@ -166,9 +168,6 @@ class ChangeDetection(Module):
     def run(self, on_the_server: bool = False) -> None:
         # Update parameters
         self._on_the_server = on_the_server
-        self._cd_id = self._config.cd_conf['cd_id']
-        self._threshold = self._config.cd_conf['threshold']
-        self._type = self._config.cd_conf['type']
 
         # Check filters
         assert not (set(self._config.filters['product']) - {'NDVI_reconstructed'}), \
@@ -205,10 +204,11 @@ class ChangeDetection(Module):
                   f'min elapsed.\n ---- Image name: {cd_todo[i][1]}')
             tile, filename, year = cd_todo[i]
             image_delta = ImageRef(filename, year, tile, 'NDVI_reconstructed', type='delta')
+            image_nci = ImageRef(filename.replace('delta', 'nci3'), year, tile, 'NDVI_reconstructed', type='nci')
             image_cprob = ImageRef(filename.replace('delta', 'cprob'), tile_ref=image_delta.tile_ref, type='cprob')
 
             # Load the time-series for the subtile
-            detected_events = self.perform_cd(image_delta, image_cprob)
+            detected_events = self.perform_cd(image_delta, image_nci, image_cprob)
 
             # Add detected events to the results
             self.add_results(image_cprob, detected_events, image_cprob.extract_date())
@@ -224,12 +224,13 @@ class ChangeDetection(Module):
 
         print(f' -- CD finished. {i} images processed in {time.time() - start_time} seconds.')
 
-    def perform_cd(self, delta_imref: ImageRef, cprob_imref: ImageRef) -> list:
+    def perform_cd(self, delta_imref: ImageRef, nci_imref: ImageRef, cprob_imref: ImageRef) -> list:
         """
         Performs the change-detection on the given image.
         Checks if the c_prob image exists. Otherwise, computes it.
         Args:
             delta_imref: ImageRef of the delta image
+            nci_imref: ImageRef of the nci image
             cprob_imref: ImageRef of the c_prob image
 
         Returns:
@@ -241,7 +242,7 @@ class ChangeDetection(Module):
         try:
             self._io.check_existence_on_local(cprob_filepath, dir=False)
         except FileNotFoundError:
-            self.compute_c_prob(delta_imref)
+            self.compute_c_prob(delta_imref, nci_imref)
 
         # Load the c_prob.tif file
         c_prob = self._io.load_tif_as_ndarray(cprob_imref)
@@ -257,13 +258,17 @@ class ChangeDetection(Module):
         detected_probs = c_prob[np.where(c_prob >= self._threshold)]
         return detected_events, detected_probs
 
-    def compute_c_prob(self, delta_imref: ImageRef) -> None:
+    def compute_c_prob(self, delta_imref: ImageRef, nci_imref: ImageRef) -> None:
         print(f' ---- Computing c_prob.tif file.')
 
         if not self._on_the_server:
             # Download the delta image
             self._io.download_file(delta_imref)
+            if self._type == 'log_reg':
+                self._io.download_file(nci_imref)
         delta = self._io.load_tif_as_ndarray(delta_imref)
+        if self._type == 'log_reg':
+            nci = self._io.load_tif_as_ndarray(nci_imref)
 
         n_bands = delta.shape[0]
         delta[np.isnan(delta)] = 0
@@ -287,6 +292,21 @@ class ChangeDetection(Module):
             # Set all pixels with slope > 0 to c_prob = 0
             c_prob[mask] = 0
 
+        if self._type == 'log_reg':
+            c_prob = np.ones(delta.shape[1:]) * coefficients_log_reg['intercept']
+            c_prob += coefficients_log_reg['nci_0'] * nci[0, :, :]
+            c_prob += coefficients_log_reg['nci_1'] * nci[1, :, :]
+            c_prob += coefficients_log_reg['nci_2'] * nci[2, :, :]
+            c_prob += coefficients_log_reg['nci_3'] * nci[3, :, :]
+            c_prob += coefficients_log_reg['delta_0'] * delta[0, :, :]
+            c_prob += coefficients_log_reg['delta_1'] * delta[1, :, :]
+            c_prob += coefficients_log_reg['delta_2'] * delta[2, :, :]
+            c_prob += coefficients_log_reg['delta_3'] * delta[3, :, :]
+            c_prob += coefficients_log_reg['delta_4'] * delta[4, :, :]
+
+            # Apply the logistic function
+            c_prob = 1 / (1 + np.exp(-c_prob))
+
         # Save the c_prob.tif file
         c_prob_filename = f'{delta_imref.filename.replace("delta", "cprob")}'
 
@@ -301,7 +321,7 @@ class ChangeDetection(Module):
         raster[min_i:max_i, min_j:max_j] = c_prob
         del c_prob
 
-        crs, geotransform, _ = self._spatial_info_crop_images[delta_imref.tile_ref.tile]
+        crs, geotransform, _, _ = self._spatial_info_crop_images[delta_imref.tile_ref.tile]
         self._io.save_ndarray_as_tif(raster, cprob_imref, crs=crs, geotransform=geotransform)
 
     def add_results(self, image_ref: ImageRef, detected_events: list, date: str) -> None:
@@ -340,7 +360,7 @@ class ChangeDetection(Module):
             n_detected_events: number of detected events
         """
         record = [self._cd_id, self._threshold, image_from.tile, image_from.year, image_from.filename, image_to
-                  .filename, n_detected_events, timestamp()]
+        .filename, n_detected_events, timestamp()]
         self._cd_records.loc[len(self._cd_records)] = record
 
     def _check_if_subtile_is_available(self, subtile):
