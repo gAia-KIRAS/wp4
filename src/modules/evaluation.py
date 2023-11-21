@@ -20,6 +20,14 @@ class Evaluation(Module):
         self._compute_baseline_eval = self._config.eval_conf['baseline_eval']
         self._build_train_dataset = self._config.eval_conf['build_train_dataset']
 
+        try:
+            df = pd.read_csv(f'{io.config.base_local_dir}/operation_records/train_features.csv')
+            self._train_feat = df[['i', 'j', 'year', 'tile', 'date']].rename(columns={'date': 'detected_breakpoint'})
+            self._train_feat['detected_breakpoint'] = pd.to_datetime(self._train_feat['detected_breakpoint'],
+                                                                     format='%Y-%m-%d')
+        except FileNotFoundError:
+            self._train_feat = pd.DataFrame(columns=['i', 'j', 'year', 'tile', 'detected_breakpoint'])
+
         # Some general time limits. Will be filtered in detail when merging with the results
         self._date_start = '2018-01-01'
         self._date_end = '2022-12-31'
@@ -335,12 +343,15 @@ class Evaluation(Module):
 
         results = results[['i', 'j', 'detected_breakpoint', 'lat', 'lon', 'd_prob', 'year', 'tile']].sort_values(
             by='d_prob', ascending=False)
-        if not self._build_train_dataset:
-            results.drop(columns=['i', 'j'], inplace=True)
         if self._tile_filters:
             results = results[results['tile'].isin(self._tile_filters)]
         results['detected_breakpoint'] = pd.to_datetime(results['detected_breakpoint'], format='%Y%m%d')
         assert len(results) > 0, f'No results found for cd_id {self._cd_id}'
+
+        # Remove points that were in self._train_feat
+        self._train_feat['aux'] = 1
+        results = results.merge(self._train_feat, on=['i', 'j', 'year', 'tile', 'detected_breakpoint'], how='left')
+        results = results[results['aux'].isnull()].drop(columns=['aux'])
 
         # Convert to GeoDataFrame using the coordinates
         results = gpd.GeoDataFrame(results, geometry=gpd.points_from_xy(results['lon'], results['lat']), crs=self._CRS)
@@ -388,6 +399,7 @@ class Evaluation(Module):
         date3 = date3.fillna(date2)
         date3 = date3.fillna(date1)
         inventory['date'] = date3
+
 
         return inventory[(inventory.date >= self._date_start) & (inventory.date < self._date_end)]
 

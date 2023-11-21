@@ -111,5 +111,5 @@ if __name__ == "__main__":
     io_config = IOConfig()
     io = IO(io_config)
 
-    model, X, y, coef_dict= build_logistic_regression_model()
+    model, X, y, coef_dict = build_logistic_regression_model()
     check_predictions(model, X, y, coef_dict)
