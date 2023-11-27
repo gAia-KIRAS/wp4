@@ -8,6 +8,13 @@ from modules.abstract_module import Module
 
 
 class BuildTrainDataset(Module):
+    """
+    Module for building the train dataset for the aggregation formula.
+
+    Attributes:
+        _on_the_server (bool): if True, the module is being executed on the server.
+        _raw_images_df (pd.DataFrame): dataframe with the raw images.
+    """
     def __init__(self, config, io):
         super().__init__(config, io)
 
@@ -15,12 +22,20 @@ class BuildTrainDataset(Module):
 
         self._raw_images_df = self._io.filter_all_images(image_type='raw', filters={})
 
-    def get_features_for_point(self, row):
+    def get_features_for_point(self, row) -> list:
+        """
+        Gets the features for a given point. The features are the NCI values, the delta values and the raw NDVI value.
+
+        Args:
+            row: (named tuple) the row of the train_inv dataframe.
+
+        Returns:
+            features (list): the features
+        """
         i, j = row.i, row.j
         date = pd.to_datetime(row.detected_breakpoint, format='%Y-%m-%d')
         year = row.year
         tile = row.tile
-        y = row.y
 
         filepath_nci = f'nci3_NDVIrec_{year}_{tile}_{date.strftime("%Y%m%d")}.tif'
         filepath_delta = f'delta_NDVIrec_{year}_{tile}_{date.strftime("%Y%m%d")}.tif'
@@ -86,10 +101,21 @@ class BuildTrainDataset(Module):
         return raster
 
     def run(self, on_the_server=False):
+        """
+        Run the module.
+        1. Read the train_inv.csv file.
+        2. Iterate over the dataset and get the features for each point.
+        3. Save the features in a csv file.
+
+        Args:
+            on_the_server: (bool) if True, the module is being executed on the server and an assertion error is raised.
+
+        """
         print(f'Starting {self.__class__.__name__}')
         print(f'Start time: {pd.Timestamp.now()}')
 
         self._on_the_server = on_the_server
+        assert not self._on_the_server, f'{self.__class__.__name__} is not implemented to run on the server.'
         train_inv_path = f'{self._io.config.base_local_dir}/operation_records/train_inv.csv'
         train_inv = pd.read_csv(train_inv_path)
 
