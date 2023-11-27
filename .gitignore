@@ -1,5 +1,9 @@
 config.yaml
 io_config.yaml
+
+# exclude data directory
+data/
+
 *.csv
 *.gpkg
 *.kml
