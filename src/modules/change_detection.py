@@ -240,7 +240,7 @@ class ChangeDetection(Module):
         cprob_filepath = f'{cprob_dir}/{cprob_imref.filename}'
 
         try:
-            self._io.check_existence_on_local(cprob_filepath, dir=False)
+            self._io.check_existence_on_local(cprob_filepath, dir_name=False)
         except FileNotFoundError:
             self.compute_c_prob(delta_imref, nci_imref)
 
@@ -366,7 +366,7 @@ class ChangeDetection(Module):
     def _check_if_subtile_is_available(self, subtile):
         filepath = f'{self._io.config.base_local_dir}/ts/ts_{subtile}.pkl'
         try:
-            self._io.check_existence_on_local(filepath, dir=False)
+            self._io.check_existence_on_local(filepath, dir_name=False)
         except FileNotFoundError:
             return None
         print(f' -- Loading time-series for subtile {subtile} from local file.')
@@ -375,6 +375,6 @@ class ChangeDetection(Module):
     def _save_subtile_ts(self, subtile, signal, dates):
         print(f' -- Saving time-series for subtile {subtile}.')
         dirpath = f'{self._io.config.base_local_dir}/ts'
-        self._io.check_existence_on_local(dirpath, dir=True)
+        self._io.check_existence_on_local(dirpath, dir_name=True)
         filepath = f'{dirpath}/ts_{subtile}.pkl'
         self._io.save_pickle((signal, dates), filepath)

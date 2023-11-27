@@ -71,7 +71,7 @@ def test_intersect_with_aoi():
 
     try:
         intersected = module.intersect(image)
-        io.check_existence_on_local(f'{io_config.base_local_dir}/{intersected.rel_filepath()}', dir=False)
+        io.check_existence_on_local(f'{io_config.base_local_dir}/{intersected.rel_filepath()}', dir_name=False)
     except Exception:
         pytest.fail(f'Intersection with AOI failed')
 

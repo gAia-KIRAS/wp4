@@ -50,20 +50,19 @@ class IO:
         """
         Close the SSH connection.
         """
-        # Close the SSH connection
         self._ssh_client.close()
 
-    def check_existence_on_server(self, remote_path: str, dir: bool = False) -> None:
+    def check_existence_on_server(self, remote_path: str, dir_name: bool = False) -> None:
         """
         Check if a directory exists on the remote server. If it is a directory and does not exist, create it.
         If it is a file and does not exist, raise an error.
 
         Args:
             remote_path: string with the path to check
-            dir: boolean indicating whether the path is a directory. Otherwise, it is a file.
+            dir_name: boolean indicating whether the path is a directory. Otherwise, it is a file.
         """
 
-        if dir:
+        if dir_name:
             # Check if directory exists. If not, create it
             command = f'test -d {remote_path}/ && echo "True" || echo "False"'
             stdin, stdout, stderr = self._ssh_client.exec_command(command)
@@ -81,7 +80,8 @@ class IO:
 
     def run_command(self, command: str, raise_exception: bool = True) -> List[str]:
         """
-        Run a command on the remote server.
+        Run a command on the remote server. If the command fails, raise an exception or a warning
+        depending on the value of raise_exception.
 
         Args:
             command: string with the command to run
@@ -125,7 +125,7 @@ class IO:
         dir = self.build_remote_dir_for_tile(tile_ref, image_type=image_type)
 
         # Check if directory exists. Will create it if it does not exist
-        self.check_existence_on_server(dir, dir=True)
+        self.check_existence_on_server(dir, dir_name=True)
 
         # Run command to list all filenames and sizes
         res = self.run_command(f'cd {dir}; ls -sh')
@@ -243,14 +243,14 @@ class IO:
         wp3/sentinel2_L2A. For any other type, the remote base directory is wp4/{type}.
 
         Args:
-            image: reference to the image to download. Must have type attribute.
+            image: ImRef reference to the image to download. Must have type attribute.
         """
         if image.type is None:
             raise Exception('Cannot build remote directory. Image type must be specified.')
 
         return self.build_remote_dir_for_tile(image.tile_ref, image.type)
 
-    def build_remote_dir_for_tile(self, tile_ref: TileRef, image_type: str):
+    def build_remote_dir_for_tile(self, tile_ref: TileRef, image_type: str) -> str:
         """
         Build the remote directory where the correspondant images are located.
         For type = "raw", the remote base directory is wp3/sentinel2_L2A.
@@ -259,6 +259,9 @@ class IO:
         Args:
             tile_ref: reference to the image to download
             image_type: string in IMAGE_TYPES
+
+        Returns:
+            remote_dir: string with the remote directory
         """
         rel_dir = ("wp3/sentinel2_L2A" if image_type == 'raw' else f"wp4/{image_type}") + \
                   f"/{tile_ref.year}/{tile_ref.tile}"
@@ -269,7 +272,7 @@ class IO:
             rel_dir += f"/tmp"
         return f"{self._config.base_server_dir}/{rel_dir}"
 
-    def download_file(self, image: ImageRef):
+    def download_file(self, image: ImageRef) -> None:
         """
         Download a file from the remote server. If the file already exists locally, it will not be downloaded.
 
@@ -281,17 +284,17 @@ class IO:
 
         dir = self.build_remote_dir_for_image(image)
         filepath = f'{dir}/{image.filename}'
-        self.check_existence_on_server(dir, dir=True)
+        self.check_existence_on_server(dir, dir_name=True)
 
         local_dir = f'{self._config.base_local_dir}/{image.rel_dir()}'
         local_filepath = f'{self._config.base_local_dir}/{image.rel_filepath()}'
-        self.check_existence_on_local(local_dir, dir=True)
+        self.check_existence_on_local(local_dir, dir_name=True)
 
         try:
             self.check_existence_on_local(local_filepath)
             warnings.warn(f'\nFile {image.filename} already exists on local machine. Will not be downloaded')
         except FileNotFoundError as e:
-            self.check_existence_on_server(filepath, dir=False)
+            self.check_existence_on_server(filepath, dir_name=False)
             sftp = self._ssh_client.open_sftp()
             sftp.get(f'{dir}/{image.filename}', local_filepath)
             sftp.close()
@@ -309,7 +312,7 @@ class IO:
         assert tile_ref.product in self._config.available_products, f'Product {tile_ref.product} not available.'
 
     @staticmethod
-    def check_existence_on_local(local_path: str, dir: bool = False):
+    def check_existence_on_local(local_path: str, dir_name: bool = False) -> None:
         """
         Check if a directory or file exists on the local machine.
         If it is a directory and does not exist, create it.
@@ -317,18 +320,19 @@ class IO:
 
         Args:
             local_path: string with the directory to check
-            dir: boolean indicating if the path is a directory or not
+            dir_name: boolean indicating if the path is a directory or not
         """
-        if dir:
+        if dir_name:
             if not os.path.isdir(local_path):
                 os.makedirs(local_path)
         else:
             if not os.path.isfile(local_path):
                 raise FileNotFoundError(f'File {local_path} does not exist.')
 
-    def upload_file(self, image: ImageRef):
+    def upload_file(self, image: ImageRef) -> None:
         """
-        Upload a file to the remote server.
+        Upload a file to the remote server using SFTP.
+        If the file already exists on the server, it will be overwritten with a warning.
 
         Args:
             image: ImageRef object with the image to upload
@@ -338,16 +342,16 @@ class IO:
 
         dir = self.build_remote_dir_for_image(image)
         filepath = f'{dir}/{image.filename}'
-        self.check_existence_on_server(dir, dir=True)
+        self.check_existence_on_server(dir, dir_name=True)
 
         try:
-            self.check_existence_on_server(filepath, dir=False)
+            self.check_existence_on_server(filepath, dir_name=False)
             warnings.warn(f'\nFile {image.filename} already exists on server. Overwritting it.')
         except FileNotFoundError:
             pass
 
         local_dir = f'{self._config.base_local_dir}/{image.rel_dir()}'
-        self.check_existence_on_local(local_dir, dir=True)
+        self.check_existence_on_local(local_dir, dir_name=True)
         local_filepath = f'{self._config.base_local_dir}/{image.rel_filepath()}'
         self.check_existence_on_local(local_filepath)
 
@@ -355,9 +359,9 @@ class IO:
         sftp.put(local_filepath, filepath)
         sftp.close()
 
-    def delete_local_file(self, image: ImageRef):
+    def delete_local_file(self, image: ImageRef) -> None:
         """
-        Delete a file from the local machine.
+        Delete a file from the local machine if it exists. If it does not exist, throw a warning.
 
         Args:
             image: ImageRef object with the image to delete
@@ -367,23 +371,29 @@ class IO:
         self.check_inputs_with_metadata(image.tile_ref)
 
         local_dir = f'{self._config.base_local_dir}/{image.rel_dir()}'
-        self.check_existence_on_local(local_dir, dir=True)
+        self.check_existence_on_local(local_dir, dir_name=True)
         try:
-            self.check_existence_on_local(f'{local_dir}/{image.filename}', dir=False)
+            self.check_existence_on_local(f'{local_dir}/{image.filename}', dir_name=False)
         except FileNotFoundError as e:
             warnings.warn(f'\nFile {image.filename} does not exist on local machine. Will not be deleted')
             return
 
         os.remove(f'{local_dir}/{image.filename}')
 
-    def delete_remote_file(self, image: ImageRef):
+    def delete_remote_file(self, image: ImageRef) -> None:
+        """
+        Delete a file from the remote server if it exists. If it does not exist, throw an exception.
+
+        Args:
+            image: ImageRef object with the image to delete
+        """
         print(f'Deleting image {image} from server.')
         self.check_inputs_with_metadata(image.tile_ref)
 
         dir = self.build_remote_dir_for_image(image)
         filepath = f'{dir}/{image.filename}'
-        self.check_existence_on_server(dir, dir=True)
-        self.check_existence_on_server(filepath, dir=False)
+        self.check_existence_on_server(dir, dir_name=True)
+        self.check_existence_on_server(filepath, dir_name=False)
 
         # Make it impossible to delete files from the raw folder
         if image.type == 'raw':
@@ -430,9 +440,9 @@ class IO:
         except FileNotFoundError:
             return pd.DataFrame(columns=RESULTS_CD_FILE_COLUMNS)
 
-    def save_records(self, records: pd.DataFrame):
+    def save_records(self, records: pd.DataFrame) -> None:
         """
-        Save the records .csv file to the local machine.
+        Save the records .csv file to the local machine. Check that the columns are correct.
 
         Args:
             records: pandas DataFrame with the records
@@ -441,28 +451,40 @@ class IO:
             f'Columns of records file must be {RECORDS_FILE_COLUMNS}'
         records.to_csv(self._config.records_path, index=False)
 
-    def save_records_cd(self, records_cd: pd.DataFrame):
+    def save_records_cd(self, records_cd: pd.DataFrame) -> None:
+        """
+        Save the records_cd .csv file to the local machine. Check that the columns are correct.
+
+        Args:
+            records_cd: pd.DataFrame with the records_cd
+        """
         assert set(records_cd.columns) == set(RECORDS_CD_FILE_COLUMNS), \
             f'Columns of records file must be {RECORDS_CD_FILE_COLUMNS}'
         records_cd.to_csv(self._config.records_cd_path, index=False)
 
-    def save_results_cd(self, results_cd: pd.DataFrame):
+    def save_results_cd(self, results_cd: pd.DataFrame) -> None:
+        """
+        Save the results_cd .csv file to the local machine. Check that the columns are correct.
+
+        Args:
+            results_cd: pd.DataFrame with the results_cd
+        """
         assert set(results_cd.columns) == set(RESULTS_CD_FILE_COLUMNS), \
             (f'Columns of records file must be {RESULTS_CD_FILE_COLUMNS}'
              f'Columns of records file are {results_cd.columns}')
         results_cd.to_csv(self._config.results_cd_path, index=False)
 
     @staticmethod
-    def save_pickle(object: Any, filepath: str):
+    def save_pickle(something: Any, filepath: str) -> None:
         """
         Save an object to a pickle file.
 
         Args:
-            object: object to save
+            something: some object to save
             filepath: path to the pickle file
         """
         with open(filepath, 'wb') as f:
-            pickle.dump(object, f)
+            pickle.dump(something, f)
 
     @staticmethod
     def load_pickle(filepath: str) -> Any:
@@ -488,6 +510,9 @@ class IO:
                 - product: list of strings with the products to filter
                 - year: list of integers with the years to filter
                 - tile: list of strings with the tiles to filter
+
+        Returns:
+            images_df: pd.DataFrame with the filtered images
         """
         images_df = self.list_all_files_of_type(image_type)[['year', 'tile', 'product', 'filename']]
         if 'product' in filters and filters['product']:
@@ -520,7 +545,7 @@ class IO:
 
         sftp.close()
 
-    def upload_inventory(self):
+    def upload_inventory(self) -> None:
         """
         Upload the inventory and aoi files to the server if they are not there. On the server, they are located in
         newstorage2/wp4/inventory. We do not copy the whole inventory folder, only the three needed files.
@@ -529,19 +554,18 @@ class IO:
 
         sftp = self._ssh_client.open_sftp()
 
-        self.check_existence_on_server(f'{self._config.base_server_dir}/wp4/inventory', dir=True)
+        self.check_existence_on_server(f'{self._config.base_server_dir}/wp4/inventory', dir_name=True)
 
-        # for aoi_extension in ['shp', 'shx', 'gpkg', 'dbf', 'prj', 'cpg']:
         for aoi_extension in ['gpkg', 'shp', 'shx']:
             server_path = f'{self._config.base_server_dir}/wp4/{self._config.aoi_rel_path[aoi_extension]}'
             try:
-                self.check_existence_on_server(server_path, dir=False)
+                self.check_existence_on_server(server_path, dir_name=False)
             except FileNotFoundError:
                 sftp.put(self._config.aoi_path[aoi_extension], server_path)
 
         sftp.close()
 
-    def upload_operations(self):
+    def upload_operations(self) -> None:
         """
         Overwrite the operations folder in the server with the local one. The operations folder is located in
         newstorage2/wp4/operation_records. We copy the whole folder.
@@ -552,7 +576,7 @@ class IO:
 
         local_operations_path = f'{self._config.base_local_dir}/operation_records'
         server_operations_path = f'{self._config.base_server_dir}/wp4/operation_records'
-        self.check_existence_on_server(server_operations_path, dir=True)
+        self.check_existence_on_server(server_operations_path, dir_name=True)
 
         # List all files in the local operations folder using os.listdir
         local_operations_files = os.listdir(local_operations_path)
@@ -563,7 +587,7 @@ class IO:
 
         sftp.close()
 
-    def update_records_on_local(self):
+    def update_records_on_local(self) -> None:
         """
         Update the records file on the local machine with the one on the server.
         """
@@ -571,27 +595,31 @@ class IO:
 
         sftp = self._ssh_client.open_sftp()
 
+        # 1. copy records.csv to local machine
         local_records_path = f'{self._config.records_path}'
         server_records_path = f'{self._config.base_server_dir}/wp4/operation_records/records.csv'
-        self.check_existence_on_server(server_records_path, dir=False)
+        self.check_existence_on_server(server_records_path, dir_name=False)
         print(f'Copying {server_records_path} to {local_records_path}')
         sftp.get(server_records_path, local_records_path)
 
+        # 2. copy records_cd.csv to local machine
         local_records_cd_path = f'{self._config.records_cd_path}'
         server_records_cd_path = f'{self._config.base_server_dir}/wp4/operation_records/records_cd.csv'
-        self.check_existence_on_server(server_records_cd_path, dir=False)
+        self.check_existence_on_server(server_records_cd_path, dir_name=False)
         print(f'Copying {server_records_cd_path} to {local_records_cd_path}')
         sftp.get(server_records_cd_path, local_records_cd_path)
 
+        # 3. copy results_cd.csv to local machine
         local_results_cd_path = f'{self._config.results_cd_path}'
         server_results_cd_path = f'{self._config.base_server_dir}/wp4/operation_records/results_cd.csv'
-        self.check_existence_on_server(server_results_cd_path, dir=False)
+        self.check_existence_on_server(server_results_cd_path, dir_name=False)
         print(f'Copying {server_results_cd_path} to {local_results_cd_path}')
         sftp.get(server_results_cd_path, local_results_cd_path)
 
+        # 4. copy train_features.csv to local machine if it exists
         train_features_path = f'{self._config.base_server_dir}/wp4/operation_records/train_features.csv'
         try:
-            self.check_existence_on_server(train_features_path, dir=False)
+            self.check_existence_on_server(train_features_path, dir_name=False)
             print(f'Copying {train_features_path} to {self._config.base_local_dir}/operation_records/train_features.csv')
             sftp.get(train_features_path, f'{self._config.base_local_dir}/operation_records/train_features.csv')
         except FileNotFoundError:
@@ -610,17 +638,16 @@ class IO:
             crs: string with the crs of the image
             geotransform: tuple with the geotransform of the image
             no_data_val: value to use as no data value
-
         """
         # Set directories and filepaths
         file_dir = f'{self._config.base_local_dir}/{image_ref.rel_dir()}'
-        self.check_existence_on_local(file_dir, dir=True)
+        self.check_existence_on_local(file_dir, dir_name=True)
         filepath = f'{file_dir}/{image_ref.filename}'
         filename_aux = image_ref.filename.replace('.tif', '_aux.tif')
         filepath_aux = f'{file_dir}/{filename_aux}'
 
         try:
-            self.check_existence_on_local(filepath, dir=False)
+            self.check_existence_on_local(filepath, dir_name=False)
             warnings.warn(f'\nFile {image_ref.filename} already exists on local machine. Will not be downloaded')
         except FileNotFoundError:
             pass
@@ -648,9 +675,18 @@ class IO:
         self.delete_local_file(ImageRef(filename_aux, tile_ref=image_ref.tile_ref, type=image_ref.type))
 
     def load_tif_as_ndarray(self, image_ref: ImageRef) -> np.ndarray:
+        """
+        Given an ImageRef object, load the corresponding .tif file as a numpy array.
+
+        Args:
+            image_ref: ImageRef object with the reference to the image to load
+
+        Returns:
+            data: numpy array with the data of the image. Shape (n_bands, rows, cols)
+        """
         c_prob_filepath = f'{self.config.base_local_dir}/{image_ref.rel_filepath()}'
         try:
-            self.check_existence_on_local(c_prob_filepath, dir=False)
+            self.check_existence_on_local(c_prob_filepath, dir_name=False)
         except FileNotFoundError:
             raise FileNotFoundError(f'Error while loading file. File {c_prob_filepath} does not exist.')
         return gdal.Open(c_prob_filepath).ReadAsArray()

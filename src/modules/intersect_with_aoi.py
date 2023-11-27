@@ -36,17 +36,17 @@ class IntersectAOI(Module):
         """
         filepath_shp = self._io.config.aoi_path['shp']
         try:
-            self._io.check_existence_on_local(filepath_shp, dir=False)
+            self._io.check_existence_on_local(filepath_shp, dir_name=False)
         except FileNotFoundError:
             filepath_gpkg = self._io.config.aoi_path['gpkg']
 
             # .gpkg should exist, otherwise throw an error
-            self._io.check_existence_on_local(filepath_gpkg, dir=False)
+            self._io.check_existence_on_local(filepath_gpkg, dir_name=False)
 
             warnings.warn(f'\nAOI in .shp format did not exist. Creating it from {filepath_gpkg}.')
             aoi = gpd.read_file(filepath_gpkg)
             aoi.to_file(filepath_shp, driver='ESRI Shapefile')
-            self._io.check_existence_on_local(filepath_shp, dir=False)
+            self._io.check_existence_on_local(filepath_shp, dir_name=False)
 
     def intersect(self, image: ImageRef, on_the_server: bool = False) -> Union[ImageRef, None]:
         """
@@ -73,8 +73,8 @@ class IntersectAOI(Module):
             filepath = f'{self._io.config.base_local_dir}/{image.rel_filepath()}'
 
         # Check existence of the file and the directory
-        self._io.check_existence_on_local(local_dir, dir=True)
-        self._io.check_existence_on_local(filepath, dir=False)
+        self._io.check_existence_on_local(local_dir, dir_name=True)
+        self._io.check_existence_on_local(filepath, dir_name=False)
 
         clip_filename = f'crop_{rename_product.get(image.product, image.product)}_{image.year}_' \
                         f'{image.tile}_{image.extract_date()}.tif'
@@ -88,10 +88,10 @@ class IntersectAOI(Module):
             clip_filepath = f'{self._io.config.base_local_dir}/{clip_image_ref.rel_filepath()}'
 
         # Check directory where will be saved exists
-        self._io.check_existence_on_local(clip_dir, dir=True)
+        self._io.check_existence_on_local(clip_dir, dir_name=True)
         # Check if file already exists. If so, warn of overwriting
         try:
-            self._io.check_existence_on_local(clip_filepath, dir=False)
+            self._io.check_existence_on_local(clip_filepath, dir_name=False)
             warnings.warn(f'\nFile {clip_filepath} already exists. Overwriting it.')
         except FileNotFoundError:
             pass

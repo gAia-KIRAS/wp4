@@ -188,14 +188,14 @@ class ChangeComputation(Module):
         else:
             save_dir = f'{self._io.config.base_local_dir}/{return_image_ref.rel_dir()}'
 
-        self._io.check_existence_on_local(save_dir, dir=True)
+        self._io.check_existence_on_local(save_dir, dir_name=True)
 
         filepath = f'{save_dir}/{filename}'
         filepath_aux = f'{save_dir}/{filename_aux}'
 
         # Check if image already exists. If so, overwrite it
         try:
-            self._io.check_existence_on_local(filepath, dir=False)
+            self._io.check_existence_on_local(filepath, dir_name=False)
             warnings.warn(f'\nNCI {filename} already exists. Overwriting it.')
         except FileNotFoundError:
             pass
@@ -243,8 +243,8 @@ class ChangeComputation(Module):
             filepath_1 = f'{dir_1}/{image_1.filename}'
             filepath_2 = f'{dir_2}/{image_2.filename}'
 
-        self._io.check_existence_on_local(filepath_1, dir=False)
-        self._io.check_existence_on_local(filepath_2, dir=False)
+        self._io.check_existence_on_local(filepath_1, dir_name=False)
+        self._io.check_existence_on_local(filepath_2, dir_name=False)
 
         return filepath_1, filepath_2
 
