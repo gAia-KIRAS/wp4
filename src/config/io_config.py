@@ -5,12 +5,27 @@ from typing import Dict
 
 class IOConfig:
     """
-    Responsible for storing the configuration of the IO manager.
+    Responsible for storing the configuration of the IO (input/output) manager.
 
     Attributes:
         _root: string with the root directory of the project
         _config_path: string with the path to the configuration file
         _config: dictionary with the configuration
+        _base_local_dir: string with the path to the base directory of the local repository
+        _temp_dir: string with the path to the temporary directory
+        _aoi_extensions: list with the extensions of the AOI files
+        _aoi_rel_path: dictionary with the relative paths of the AOI (Area of interest) files
+        _aoi_path: dictionary with the absolute paths of the AOI files
+        _inv_extensions: list with the extensions of the inventory files
+        _inventory_rel_path: dictionary with the relative paths of the inventory files
+        _inventory_path: dictionary with the absolute paths of the inventory files
+        _inventory_poly_rel_path: dictionary with the relative paths of the inventory polygon files
+        _inventory_poly_path: dictionary with the absolute paths of the inventory polygon files
+        _records_path: string with the path to the records file
+        _records_cd_path: string with the path to the records file for the CD module
+        _results_cd_path: string with the path to the results file for the CD module
+        _records_path_aux: equals the _results_cd_path if the execution is local, otherwise equals _records_path
+        _all_images_path: dictionary with the paths to the images
     """
     def __init__(self):
         self._root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -158,6 +173,11 @@ class IOConfig:
         return self._config['paths']['server_python_executable']
 
     def modify_paths_for_server(self):
+        """
+        Modifies the paths when the execution is happening on the server side. This is necessary because the
+        _base_local_dir is different for each case.
+        """
+
         self._base_local_dir = f'{self._config["paths"]["base_server_dir"]}/wp4'
         self._aoi_path = {
             "shp": os.path.join(self._base_local_dir, self._aoi_rel_path['shp']),

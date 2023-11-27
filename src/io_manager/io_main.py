@@ -1,8 +1,18 @@
+"""
+This script is used to use the IO class without having to run the main.py script.
+For instance, can be used to:
+- List all files of a particular type and save them to a csv file.
+- Check if the dates of the images are the same for all tiles.
+- Update the records with the NCI computations that have already been done.
+"""
+
 from config.io_config import IOConfig
 from io_manager import IO
 from utils import TileRef
 
 import pandas as pd
+
+
 
 
 def check_dates():
