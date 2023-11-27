@@ -19,6 +19,7 @@ class Evaluation(Module):
         self._tile_filters = self._config.filters['tile']
         self._compute_baseline_eval = self._config.eval_conf['baseline_eval']
         self._build_train_dataset = self._config.eval_conf['build_train_dataset']
+        self._take_positives = self._config.eval_conf['take_positives']
 
         try:
             df = pd.read_csv(f'{io.config.base_local_dir}/operation_records/train_features.csv')
@@ -84,6 +85,13 @@ class Evaluation(Module):
 
         if self._build_train_dataset:
             self._build(eval_df)
+
+        if self._take_positives:
+            self._take_positives_and_save(eval_df)
+
+    def _take_positives_and_save(self, eval_df) -> None:
+        eval_df[eval_df['y'] == 1].to_csv(f'{self._io.config.base_local_dir}'
+                                          f'/operation_records/positives.csv', index=False)
 
     def _build(self, eval_df) -> None:
         df = pd.DataFrame(columns=['i', 'j', 'detected_breakpoint', 'lat', 'lon', 'year', 'tile', 'y'])
