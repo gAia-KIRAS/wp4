@@ -1,7 +1,8 @@
 import time
-from typing import Tuple
+from typing import Tuple, Any
 
 import pandas as pd
+from numpy import ndarray
 from osgeo import osr, ogr, gdal
 from config.config import Config
 from io_manager.io_manager import IO
@@ -30,17 +31,30 @@ class ChangeDetection(Module):
     - c_prob.tif: for each image, a raster file with the probability of change for each pixel
 
     The results_cd file has the following columns:
-    - cd_id: ID of the CD run
+    - version: version ID of the CD run
     - threshold: threshold used to filter the detected events
     - tile: tile ID
-    - subtile: subtile ID
-    - i: row index of the pixel
-    - j: column index of the pixel
-    - timestamp: timestamp of the CD run
-    - detected_breakpoint: timestamp of the detected breakpoint
-    - d_prob: probability of change
+    - year: year of the image
+    - row: row index of the pixel
+    - column: column index of the pixel
+    - date: date of the prediction
+    - probability: prediction probability
+    - timestamp: timestamp of the detection. When the prediction was executed
+    - lat: latitude coordinate of the pixel
+    - lon: longitude coordinate of the pixel
 
     The c_prob.tif file has only one band, which is the probability of change for each pixel.
+
+    Attributes:
+        _cd_records: (pd.DataFrame) the records of the CD runs.
+        _cd_results: (pd.DataFrame) the CD results dataframe.
+        _all_delta: (pd.DataFrame) contains information on all the delta images available.
+        _on_the_server: (bool) if True, the module is being executed on the server.
+        _cd_id: (str) the ID of the CD run. Becomes "version" in the results_cd file.
+        _threshold: (float) the threshold used to filter the detected events. Must be in [0, 1].
+        _type: (str) the type of CD to perform. Can be 'basic_mean', 'nci_logic' or 'log_reg'.
+        _reference_images: (dict) dictionary with the reference images.
+        _spatial_info_crop_images: (dict) dictionary with the spatial information of the reference images.
     """
 
     def __init__(self, config: Config, io: IO):
@@ -55,12 +69,10 @@ class ChangeDetection(Module):
         self._threshold = self._config.cd_conf['threshold']
         self._type = self._config.cd_conf['type']
 
-        print(f'Loading reference images')
         self._reference_images = {
             tile: gdal.Open(f'{self._io.config.base_local_dir}/{reference_crop_images[tile]}')
             for tile in self._io.config.available_tiles
         }
-        print(f'Building spatial info for reference images')
         self._spatial_info_crop_images = {
             tile: (self._reference_images[tile].GetProjection(),
                    self._reference_images[tile].GetGeoTransform(),
@@ -122,38 +134,6 @@ class ChangeDetection(Module):
         point.Transform(self._spatial_info_crop_images[tile][2])
         return point.GetX(), point.GetY()
 
-    def latlon_to_pixel(self, tile, lat, lon) -> Tuple[int, int]:
-        """
-        Find the pixel coordinates of the lat and lon coordinates in the original image.
-
-        Args:
-            tile: tile ID
-            lat: lat coordinate
-            lon: lon coordinate
-
-        Returns:
-
-        """
-        point = ogr.Geometry(ogr.wkbPoint)
-        point.AddPoint(lon, lat)
-        point.Transform(self._spatial_info_crop_images[tile][3])
-        world_j, world_i = point.GetX(), point.GetY()
-        return self.world_to_pixel(tile, world_i, world_j)
-
-    def world_to_pixel(self, tile, world_i, world_j) -> Tuple[int, int]:
-        """
-        Transforms the world coordinates to pixel coordinates using the reference image.
-        Args:
-            tile: tile ID
-            world_i: row index of the pixel
-            world_j: column index of the pixel
-
-        Returns:
-            i and j coordinates of the pixel in the pixel coordinates
-        """
-        geo_matrix = self._spatial_info_crop_images[tile][1]
-        return int((world_i - geo_matrix[3]) / geo_matrix[5]), int((world_j - geo_matrix[0]) / geo_matrix[1])
-
     def pixel_to_world(self, tile, i, j) -> Tuple[float, float]:
         """
         Transforms the pixel coordinates to world coordinates using the reference image.
@@ -169,11 +149,24 @@ class ChangeDetection(Module):
         return j * geo_matrix[1] + geo_matrix[0], i * geo_matrix[5] + geo_matrix[3]
 
     def run(self, on_the_server: bool = False) -> None:
+        """
+        Runs the Change Detection module. Follows the steps:
+        1. Get all the images to process.
+        2. Iterate over the images and perform the CD.
+            2.1 If the c_prob image is already computed for the image, only the threshold is applied.
+            2.2 If the c_prob image is not computed, it is computed and the threshold is applied.
+        3. Save the results and the records.
+
+        Args:
+            on_the_server: (bool) if True, the module is executed on the server.
+
+        """
+
         # Update parameters
         self._on_the_server = on_the_server
 
         # Check filters
-        assert not (set(self._config.filters['product']) - {'NDVI_reconstructed'}), \
+        assert not (set(self._config.filters['product']) - {'NDVI_reconstructed'}),\
             'CD can only be applied to NDVI_reconstructed'
 
         # Get all tiles and dates
@@ -254,7 +247,18 @@ class ChangeDetection(Module):
 
         return list(zip(detected_events, detected_probs))
 
-    def apply_filter(self, c_prob):
+    def apply_filter(self, c_prob: np.ndarray) -> tuple[ndarray, ndarray]:
+        """
+        Applies the threshold to the c_prob.tif file and returns the detected events and the associated probabilities.
+
+        Args:
+            c_prob: (np.ndarray) corresponding to the c_prob image
+
+        Returns:
+            detected_events: list of detected events
+            detected_probs: list of probabilities associated to the detected events
+
+        """
         print(f' ---- Applying threshold {self._threshold} to c_prob.tif file.')
         # Get index of the pixels with prob > threshold
         detected_events = np.asarray(np.where(c_prob >= self._threshold)).T.tolist()
@@ -262,6 +266,19 @@ class ChangeDetection(Module):
         return detected_events, detected_probs
 
     def compute_c_prob(self, delta_imref: ImageRef, nci_imref: ImageRef) -> None:
+        """
+        Compute the change probability, saving it to the c_prob.tif file.
+        Apply the corresponding logic depending on the type of CD to perform. Possible types:
+        - basic_mean: average of the correlation, pixel vs average and ndvi differences
+        - nci_logic: average of the correlation, pixel vs average and ndvi differences, but set to 0 the pixels with
+        slope > 0
+        - log_reg: use the aggregation given by the logistic regression model
+
+        Args:
+            delta_imref: ImageRef of the delta image
+            nci_imref: ImageRef of the nci image
+
+        """
         print(f' ---- Computing c_prob.tif file.')
 
         if not self._on_the_server:
@@ -337,19 +354,21 @@ class ChangeDetection(Module):
             date: date of the image. Will be the date of the detected breakpoint
         """
         new_records = {
-            'i': [i for (i, j), prob in detected_events],
-            'j': [j for (i, j), prob in detected_events],
-            'd_prob': [prob for _, prob in detected_events]
+            'row': [i for (i, j), prob in detected_events],
+            'column': [j for (i, j), prob in detected_events],
+            'probability': [prob for _, prob in detected_events]
         }
         new_records = pd.DataFrame(new_records)
-        new_records['cd_id'] = self._cd_id
+        new_records['version'] = self._cd_id
         new_records['threshold'] = self._threshold
         new_records['tile'] = image_ref.tile
         new_records['year'] = image_ref.year
-        new_records['detected_breakpoint'] = date
+        new_records['date'] = date
+        new_records['date'] = pd.to_datetime(new_records['date'], format="%Y%m%d")
         new_records['timestamp'] = timestamp()
+        new_records['timestamp'] = pd.to_datetime(new_records['timestamp'], format="%Y%m%d_%H%M%S")
         new_records[['lat', 'lon']] = new_records.apply(
-            lambda row: self.pixel_to_latlon(image_ref.tile, row['i'], row['j']), axis=1, result_type='expand')
+            lambda x: self.pixel_to_latlon(image_ref.tile, x['row'], x['column']), axis=1, result_type='expand')
 
         self._cd_results = pd.concat([self._cd_results, new_records], ignore_index=True).reset_index(drop=True)
 
@@ -366,18 +385,3 @@ class ChangeDetection(Module):
         .filename, n_detected_events, timestamp()]
         self._cd_records.loc[len(self._cd_records)] = record
 
-    def _check_if_subtile_is_available(self, subtile):
-        filepath = f'{self._io.config.base_local_dir}/ts/ts_{subtile}.pkl'
-        try:
-            self._io.check_existence_on_local(filepath, dir_name=False)
-        except FileNotFoundError:
-            return None
-        print(f' -- Loading time-series for subtile {subtile} from local file.')
-        return self._io.load_pickle(filepath)
-
-    def _save_subtile_ts(self, subtile, signal, dates):
-        print(f' -- Saving time-series for subtile {subtile}.')
-        dirpath = f'{self._io.config.base_local_dir}/ts'
-        self._io.check_existence_on_local(dirpath, dir_name=True)
-        filepath = f'{dirpath}/ts_{subtile}.pkl'
-        self._io.save_pickle((signal, dates), filepath)

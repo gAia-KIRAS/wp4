@@ -17,6 +17,10 @@ class IntersectAOI(Module):
     This module does the step: RAW -> CROP
     It intersects the Area of Interest (AOI) with the raw images and saves the result as a new .tif file.
 
+    NOTE: this module is not used in the final version of the project. The main pipeline performs directly
+    RAW -> NCI -> DELTA -> CPROB. The cropping step is included when computing the NCI module.
+    However, the module is still functional.
+
     Attributes:
         _io (IO): IO object
         _config (Config): Config object

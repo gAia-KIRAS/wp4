@@ -1,3 +1,14 @@
+"""
+This is a more 'exploratory' module than the others, and does not inherit from the abstract Module class.
+It is used to build a logistic regression model that predicts the probability of a pixel being a break point.
+The model is built using the train_inv.csv file, which contains the points that will be used for training.
+The features are the NCI values, the delta values and the raw NDVI value.
+The model is built using the sklearn library.
+
+It should only be run again if the train_inv.csv file is updated, i.e., if a new selection of points are used for
+training. The results are then updated in the utils.py file, in the coefficients_log_reg dictionary.
+"""
+
 import random
 
 import pandas as pd
@@ -12,6 +23,9 @@ from io_manager.io_manager import IO
 
 
 def build_logistic_regression_model():
+    """
+    Builds a logistic regression model that predicts the probability of a pixel being a break point.
+    """
     # Load the dataset
     df = pd.read_csv(f'{io.config.base_local_dir}/operation_records/train_features.csv')
 
@@ -23,26 +37,13 @@ def build_logistic_regression_model():
     print(f'Features shape: {X.shape}')
     print(f'Target shape: {y.shape}')
 
-    # # Split the dataset into training and testing sets
-    # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
+    # Feature engineering
     def feature_engineering(X):
         # Any inf value takes the mean of the column
         X = X.replace([np.inf, -np.inf], np.nan)
         X = X.fillna(X.mean())
 
-        # # Normalize the data column wise
-        # X = (X - X.mean()) / X.std()
-
         return X
-
-    #
-    # # Print the shape of the training and testing sets
-    # print(f'Training set shape: {X_train.shape}')
-    # print(f'Testing set shape: {X_test.shape}')
-    #
-    # X_train = feature_engineering(X_train)
-    # X_test = feature_engineering(X_test)
 
     X = feature_engineering(X)
 
@@ -73,7 +74,7 @@ def build_logistic_regression_model():
 
     print(f'Coefficients: {coef_dict}')
 
-    # print the accuracy, precision, recall, and F1 score of a random classifier
+    # Print model results
     y_pred = [random.randint(0, 1) for _ in range(len(y))]
     print(f'{y_pred}')
     print(f'Random classifier: ')
@@ -86,6 +87,11 @@ def build_logistic_regression_model():
 
 
 def check_predictions(model, X, y, coef_dict):
+    """
+    This is a check to see if the predictions of the model are the same as the predictions built manually.
+    It is important because in the change detection module, we won't use the sklearn model object, but just use
+    the coefficients to build the predictions manually, which saves time.
+    """
     # Predict on first 10 rows
     y_pred = model.predict_proba(X[:10])
     y_pred = [x[1] for x in y_pred]

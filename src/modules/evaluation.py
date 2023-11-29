@@ -8,6 +8,25 @@ from modules.abstract_module import Module
 
 
 class Evaluation(Module):
+    """
+    This module evaluates the results of the change detection module. It compares the predictions with the ground truth
+    (inventory) and calculates the precision and recall.
+
+    Attributes:
+        _cd_id (str): id of the change detection
+        _results (pd.DataFrame): table with the results
+        _CRS (int): coordinate reference system
+        _aoi (GeoDataFrame): area of interest
+        _tile_filters (list): list of tiles to filter the results
+        _compute_baseline_eval (bool): whether to compute the baseline evaluation or not
+        _build_train_dataset (bool): whether to build the train dataset for the LogRegression model or not
+        _date_start (str): start date for the evaluation. It is a static parameter for now (data goes from 2018 to 2022)
+        _date_end (str): end date for the evaluation. It is a static parameter for now (data goes from 2018 to 2022)
+        _max_dist (float): maximum distance between a prediction and a landslide in order to consider it a match.
+        It is given in CRS units, and it corresponds to 6 meters.
+
+
+    """
     def __init__(self, config, io):
         super().__init__(config, io)
         self._cd_id = self._config.eval_conf['cd_id']
@@ -22,11 +41,12 @@ class Evaluation(Module):
 
         try:
             df = pd.read_csv(f'{io.config.base_local_dir}/operation_records/train_features.csv')
-            self._train_feat = df[['i', 'j', 'year', 'tile', 'date']].rename(columns={'date': 'detected_breakpoint'})
-            self._train_feat['detected_breakpoint'] = pd.to_datetime(self._train_feat['detected_breakpoint'],
-                                                                     format='%Y-%m-%d')
+            self._train_feat = df[['row', 'column', 'year', 'tile', 'date']].rename(
+                columns={'date': 'date_pred'}
+            )
+            self._train_feat['date'] = pd.to_datetime(self._train_feat['date'], format='%Y-%m-%d')
         except FileNotFoundError:
-            self._train_feat = pd.DataFrame(columns=['i', 'j', 'year', 'tile', 'detected_breakpoint'])
+            self._train_feat = pd.DataFrame(columns=['row', 'column', 'year', 'tile', 'date_pred'])
 
         # Some general time limits. Will be filtered in detail when merging with the results
         self._date_start = '2018-01-01'
@@ -86,21 +106,29 @@ class Evaluation(Module):
             self._build(eval_df)
 
     def _build(self, eval_df) -> None:
-        df = pd.DataFrame(columns=['i', 'j', 'detected_breakpoint', 'lat', 'lon', 'year', 'tile', 'y'])
+        """
+        Builds the train dataset for the LogRegression model. It takes 100 points with y = 1 and 100 points with y = 0.
+        Saves the dataset in operation_records/train_inv.csv. This dataset still has no features, it just contains the
+        points that will be used for training.
+
+        Args:
+            eval_df: table with the evaluation results
+
+        """
+        df = pd.DataFrame(columns=['row', 'column', 'date', 'lat', 'lon', 'year', 'tile', 'y'])
         # Take 100 points with y = 1 and 100 points with y = 0
         for y in [0, 1]:
             df = pd.concat([df, eval_df[eval_df['y'] == y].sample(n=100, random_state=42)])
         df.to_csv(f'{self._io.config.base_local_dir}/operation_records/train_inv.csv', index=False)
 
-    def disaggregate_results(self, eval_df, results) -> None:
+    @staticmethod
+    def disaggregate_results(eval_df, results) -> None:
         """
         Computes and displays precision and recall for every year and tile.
 
         Args:
-            eval_df: table with the evaluation results
-            results: original table with predictions (not matched with ground truth)
-
-        Returns:
+            eval_df: (pd.DataFrame) table with the evaluation output
+            results: (pd.DataFrame) original table with predictions (not matched with ground truth)
 
         """
         years = results['year'].unique()
@@ -145,13 +173,13 @@ class Evaluation(Module):
         # For every prediction, add 0 / 1 depending on whether there is a close match with the inventory
         results_gt = gpd.sjoin_nearest(results, inventory, how='left', distance_col='distance',
                                        max_distance=self._max_dist).sort_values(by='distance')
-        results_gt['date_distance'] = (results_gt['date'] - results_gt['detected_breakpoint']).dt.days
+        results_gt['date_distance'] = (results_gt['date'] - results_gt['date_pred']).dt.days
         results_gt = results_gt.merge(inventory[['landslide_id', 'geometry']].rename(
             columns={'geometry': 'geometry_gt'}
         ), on='landslide_id', how='left')
         detected_landslide_ids += results_gt['landslide_id'].unique().tolist()
         detected_landslide_ids = [x for x in detected_landslide_ids if not np.isnan(x)]
-        results_gt.drop_duplicates(subset=['lon', 'lat', 'detected_breakpoint'], inplace=True)
+        results_gt.drop_duplicates(subset=['lon', 'lat', 'date_pred'], inplace=True)
 
         # If there is no match, set y = 0
         results_gt['y'] = 0
@@ -185,7 +213,7 @@ class Evaluation(Module):
         results_gt_poly.loc[results_gt_poly['landslide_id'].notnull(), 'y'] = 1
         detected_landslide_ids += results_gt_poly['landslide_id'].unique().tolist()
         detected_landslide_ids = [x for x in detected_landslide_ids if not np.isnan(x)]
-        results_gt_poly = (results_gt_poly.groupby(['i', 'j', 'detected_breakpoint', 'lat', 'lon'], as_index=False).
+        results_gt_poly = (results_gt_poly.groupby(['i', 'j', 'date_pred', 'lat', 'lon'], as_index=False).
                            agg({'y': 'max'}))
         return detected_landslide_ids, landslide_ids, results_gt_poly
 
@@ -202,13 +230,13 @@ class Evaluation(Module):
             eval_df: table with the evaluation results
         """
         # Merge results
-        eval_df = results[['i', 'j', 'detected_breakpoint', 'lat', 'lon', 'year', 'tile']].drop_duplicates()
+        eval_df = results[['i', 'j', 'date_pred', 'lat', 'lon', 'year', 'tile']].drop_duplicates()
         if self._config.eval_conf['type'] != 'polygons':
-            eval_df = eval_df.merge(results_gt[['i', 'j', 'detected_breakpoint', 'lat', 'lon', 'y']].rename(
-                columns={'y': 'y_points'}), on=['i', 'j', 'detected_breakpoint', 'lat', 'lon'], how='left')
+            eval_df = eval_df.merge(results_gt[['i', 'j', 'date_pred', 'lat', 'lon', 'y']].rename(
+                columns={'y': 'y_points'}), on=['i', 'j', 'date_pred', 'lat', 'lon'], how='left')
         if self._config.eval_conf['type'] != 'points':
-            eval_df = eval_df.merge(results_gt_poly[['i', 'j', 'detected_breakpoint', 'lat', 'lon', 'y']].rename(
-                columns={'y': 'y_poly'}), on=['i', 'j', 'detected_breakpoint', 'lat', 'lon'], how='left')
+            eval_df = eval_df.merge(results_gt_poly[['i', 'j', 'date_pred', 'lat', 'lon', 'y']].rename(
+                columns={'y': 'y_poly'}), on=['i', 'j', 'date_pred', 'lat', 'lon'], how='left')
         # Create y column (y_points or y_poly)
         if self._config.eval_conf['type'] == 'points':
             eval_df['y'] = eval_df['y_points']
@@ -219,7 +247,8 @@ class Evaluation(Module):
             eval_df['y'] = eval_df['y'].fillna(0)
         return eval_df
 
-    def calculate_results(self, detected_landslide_ids, eval_df, landslide_ids, results) -> tuple:
+    @staticmethod
+    def calculate_results(detected_landslide_ids, eval_df, landslide_ids, results) -> tuple:
         """
         Calculates the evaluation results: tp, fp, precision, recall
 
@@ -241,7 +270,8 @@ class Evaluation(Module):
         recall = len(detected_landslide_ids) / len(landslide_ids)
         return fp, tp, precision, recall
 
-    def print_general_results(self, detected_landslide_ids, fp, landslide_ids, precision, recall, tp) -> None:
+    @staticmethod
+    def print_general_results(detected_landslide_ids, fp, landslide_ids, precision, recall, tp) -> None:
         """
         Prints the general evaluation results.
 
@@ -312,13 +342,13 @@ class Evaluation(Module):
         """
         # Generate n random predictions. Must be within dim. Date is random between 2018 and 2022
         random_results = pd.DataFrame({
-            'detected_breakpoint': pd.date_range(start='2018-01-01', end='2022-12-31', periods=n),
+            'date_pred': pd.date_range(start='2018-01-01', end='2022-12-31', periods=n),
             'r': np.random.rand(n),
         })
         random_results['lat'] = round(dim['min_lat'] + (dim['max_lat'] - dim['min_lat']) * random_results['r'], 10)
         random_results['lon'] = round(dim['min_lon'] + (dim['max_lon'] - dim['min_lon']) * random_results['r'], 10)
         random_results['d_prob'] = 1
-        random_results['year'] = random_results['detected_breakpoint'].dt.year
+        random_results['year'] = random_results['date_pred'].dt.year
         random_results['tile'] = '33TUM'
         random_results.drop(columns=['r'], inplace=True)
 
@@ -339,26 +369,26 @@ class Evaluation(Module):
             n_before_filter: number of results before filtering by area of interest
         """
 
-        results = self._results[self._results['cd_id'] == self._cd_id]
+        results = self._results[self._results['version'] == self._cd_id]
 
-        results = results[['i', 'j', 'detected_breakpoint', 'lat', 'lon', 'd_prob', 'year', 'tile']].sort_values(
-            by='d_prob', ascending=False)
+        results = results[['row', 'column', 'date', 'lat', 'lon', 'probability', 'year', 'tile']].sort_values(
+            by='probability', ascending=False)
         if self._tile_filters:
             results = results[results['tile'].isin(self._tile_filters)]
-        results['detected_breakpoint'] = pd.to_datetime(results['detected_breakpoint'], format='%Y%m%d')
+        results['date'] = pd.to_datetime(results['date'], format='%Y-%m-%d')
         assert len(results) > 0, f'No results found for cd_id {self._cd_id}'
 
         # Remove points that were in self._train_feat
         self._train_feat['aux'] = 1
-        results = results.merge(self._train_feat, on=['i', 'j', 'year', 'tile', 'detected_breakpoint'], how='left')
+        results = results.merge(self._train_feat, on=['i', 'j', 'year', 'tile', 'date_pred'], how='left')
         results = results[results['aux'].isnull()].drop(columns=['aux'])
 
         # Convert to GeoDataFrame using the coordinates
         results = gpd.GeoDataFrame(results, geometry=gpd.points_from_xy(results['lon'], results['lat']), crs=self._CRS)
         results.to_crs(self._CRS, inplace=True)
 
-        # Remove duplicates in lat, lon, detected_breakpoint. Keep the highest probability
-        results.drop_duplicates(subset=['lon', 'lat', 'detected_breakpoint'], inplace=True)
+        # Remove duplicates in lat, lon, date_pred. Keep the highest probability
+        results.drop_duplicates(subset=['lon', 'lat', 'date_pred'], inplace=True)
 
         # Filter according to area of interest
         n_before_filter = len(results)
@@ -399,7 +429,6 @@ class Evaluation(Module):
         date3 = date3.fillna(date2)
         date3 = date3.fillna(date1)
         inventory['date'] = date3
-
 
         return inventory[(inventory.date >= self._date_start) & (inventory.date < self._date_end)]
 

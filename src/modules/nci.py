@@ -21,10 +21,12 @@ except ImportError:
 class NCI(Module):
     """
     Class for the calculation of Neighborhood Correlation Images on consecutive Sentinel-2 images.
+    The module does the step RAW -> NCI.
+
+    Reference for the NCI calculation can be found here:
+     - https://linkinghub.elsevier.com/retrieve/pii/S0034425705002919
 
     Attributes:
-        _config (Config): Config object with the configuration parameters
-        _io (IO): IO object with the input/output parameters
         _n_size (int): size of the neighborhood
         _conv_lib (str): library to use in the convolution calculations ('torch' or 'tf')
     """
@@ -269,7 +271,6 @@ class NCI(Module):
         raster = raster[min_i:max_i, min_j:max_j]
 
         return raster
-
 
     def compute_nci_with_torch(self, r_1: np.ndarray, r_2: np.ndarray) -> torch.Tensor:
         """

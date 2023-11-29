@@ -1,5 +1,6 @@
 import time
 
+import numpy as np
 import pandas as pd
 from osgeo import gdal
 
@@ -9,7 +10,9 @@ from modules.abstract_module import Module
 
 class BuildTrainDataset(Module):
     """
-    Module for building the train dataset for the aggregation formula.
+    Module for building the train dataset for the aggregation formula. It reads a csv file with the train_inv, which
+    contains the points that will be used for training. Then, it gets the features for each point and saves them in a
+    csv file called train_features.csv.
 
     Attributes:
         _on_the_server (bool): if True, the module is being executed on the server.
@@ -88,7 +91,17 @@ class BuildTrainDataset(Module):
         return features
 
     @staticmethod
-    def crop_image(raster, image_ref: ImageRef):
+    def crop_image(raster: np.ndarray, image_ref: ImageRef) -> np.ndarray:
+        """
+        Crop an image according to the limits defined in the utils map CROP_IMAGE_LIMITS.
+
+        Args:
+            raster: (np.ndarray) the image to crop.
+            image_ref: (ImageRef) the image reference.
+
+        Returns:
+            np.ndarray: the cropped image.
+        """
         # Check dimensions
         assert raster.shape == RAW_IMAGE_SIZES.get(image_ref.tile), \
             f'Image {image_ref.filename} has wrong dimensions. Expected: {RAW_IMAGE_SIZES.get(image_ref.tile)}'
@@ -135,4 +148,3 @@ class BuildTrainDataset(Module):
             print(f' -- took {round(time.time() - start_time, 2)} seconds -- ')
 
         df.to_csv(f'{self._io.config.base_local_dir}/operation_records/train_features.csv', index=False)
-
