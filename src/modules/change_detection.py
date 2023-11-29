@@ -17,14 +17,17 @@ os.environ['PROJ_LIB'] = '/home/salva/miniconda3/envs/wp4_env/share/proj'
 
 class ChangeDetection(Module):
     """
-    Change-Detection module. The input are the Delta images, which is a 5-band time-series.
+    Class that performs the Change Detection. It performs the step NCI + Delta -> CPROB + results_CD.csv
+    This means that it takes the Delta images and the NCI images, and computes the change probability images. On top
+    of these images, it applies a threshold to detect the change events and saves the predicted events in the
+    results_CD file.
 
     If the c_prob.tif file already exists, only the application of the threshold is performed, and the
     existing image is used (not recomputed).
 
     There are two outputs:
     - results_cd.csv: tabular file with the detected events that have prob > threshold
-    - c_prob.tif: raster file with the probability of change for each pixel
+    - c_prob.tif: for each image, a raster file with the probability of change for each pixel
 
     The results_cd file has the following columns:
     - cd_id: ID of the CD run

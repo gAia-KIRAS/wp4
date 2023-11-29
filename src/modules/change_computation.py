@@ -3,10 +3,8 @@ import warnings
 
 import pandas as pd
 from osgeo import gdal
-import ruptures as rpt
 from config.config import Config
 from io_manager.io_manager import IO
-from config.io_config import IOConfig
 from modules.abstract_module import Module
 from utils import ImageRef, reference_nci_images, timestamp, RECORDS_FILE_COLUMNS, RAW_IMAGE_SIZES, \
     CROP_IMAGE_LIMITS, rename_product
@@ -15,23 +13,40 @@ import numpy as np
 
 class ChangeComputation(Module):
     """
-    Change Computation module. To replace the Change Detection module.
-    Does the step nci -> delta
-    TODO: documentation
+    Class that performs the change computation. By change computation we understand the computation of the relative
+    difference between NCI images. Therefore, it performs the step NCI -> Delta.
+    Additionally, it also computes the same relative difference for the raw NDVI values and adds them as an extra band.
+
+    Attributes:
+        _all_nci (pd.DataFrame): dataframe with all the NCI images.
+        _on_the_server (bool): if True, the module is being executed on the server.
+        _cd_id (str): the id of the change detection method.
     """
 
     def __init__(self, config: Config, io: IO):
         super().__init__(config, io)
 
-        self._cd_records = self._io.get_records_cd()
-        self._cd_results = self._io.get_results_cd()
         self._all_nci = self._io.list_all_files_of_type('nci')
 
         self._on_the_server = None
         self._cd_id = None
-        self._pelt_penalty = None
 
     def run(self, on_the_server: bool = False) -> None:
+        """
+        Runs the module. It follows the following steps:
+        1. Get all the NCI images that still have no computed CD.
+        2. For each pair of consecutive images:
+            2.1. Download the NCI images (if not already downloaded and not on_the_server).
+            2.2  Download the raw images (if not already downloaded and not on_the_server).
+            2.3  Crop the raw image accordingly (because NCI images are cropped).
+            2.4. Compute the delta.
+            2.5. Save the delta on the server.
+        3. Save records of the process.
+
+        Args:
+            on_the_server: (bool) if True, the module is being executed on the server.
+
+        """
 
         # Update parameters
         self._on_the_server = on_the_server
@@ -133,6 +148,18 @@ class ChangeComputation(Module):
 
     def compute_and_save_delta(self, image_1: ImageRef, image_2: ImageRef, raw_image_1: ImageRef,
                                raw_image_2: ImageRef) -> ImageRef:
+        """
+        Computes the delta between two images and saves it on the server.
+
+        Args:
+            image_1: ImageRef object with the first NCI image
+            image_2: ImageRef object with the second NCI image
+            raw_image_1: ImageRef object with the first raw image
+            raw_image_2: ImageRef object with the second raw image
+
+        Returns:
+            delta_image: ImageRef object with the delta image
+        """
         filepath_1, filepath_2 = self.build_and_check_paths(image_1, image_2)
         filepath_raw_1, filepath_raw_2 = self.build_and_check_paths(raw_image_1, raw_image_2)
 
@@ -176,7 +203,17 @@ class ChangeComputation(Module):
 
         return delta_image
 
-    def _save_delta(self, delta: np.ndarray, image_ref: ImageRef, srs) -> ImageRef:
+    def _save_delta(self, delta: np.ndarray, image_ref: ImageRef) -> ImageRef:
+        """
+        Saves the delta image on the server.
+
+        Args:
+            delta: np.ndarray with the delta image
+            image_ref: ImageRef object with the first NCI image (used to build the filename)
+
+        Returns:
+            return_image_ref: ImageRef object with the Delta image reference
+        """
         filename = f'delta_{rename_product.get(image_ref.product, image_ref.product)}_' \
                    f'{image_ref.year}_{image_ref.tile}_{image_ref.extract_date()}.tif'
         filename_aux = filename.replace('.tif', '_aux.tif')
@@ -222,7 +259,7 @@ class ChangeComputation(Module):
 
     def build_and_check_paths(self, image_1: ImageRef, image_2: ImageRef) -> (str, str):
         """
-        Checks if the paths to the images exist on the local machine. If not, raises an error.
+        Builds paths to directories and files. Checks if the files exist.
 
         Args:
             image_1: ImageRef object with the first image
@@ -249,7 +286,17 @@ class ChangeComputation(Module):
         return filepath_1, filepath_2
 
     @staticmethod
-    def crop_image(raster, image_ref: ImageRef):
+    def crop_image(raster, image_ref: ImageRef) -> np.ndarray:
+        """
+        Crops the image according to the limits defined in the utils map CROP_IMAGE_LIMITS.
+
+        Args:
+            raster: np.ndarray with the image
+            image_ref: ImageRef object with the image reference
+
+        Returns:
+            raster: np.ndarray with the cropped image
+        """
         # Check dimensions
         assert raster.shape == RAW_IMAGE_SIZES.get(image_ref.tile), \
             f'Image {image_ref.filename} has wrong dimensions. Expected: {RAW_IMAGE_SIZES.get(image_ref.tile)}'

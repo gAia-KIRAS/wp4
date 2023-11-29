@@ -87,7 +87,8 @@ class BuildTrainDataset(Module):
 
         return features
 
-    def crop_image(self, raster, image_ref: ImageRef):
+    @staticmethod
+    def crop_image(raster, image_ref: ImageRef):
         # Check dimensions
         assert raster.shape == RAW_IMAGE_SIZES.get(image_ref.tile), \
             f'Image {image_ref.filename} has wrong dimensions. Expected: {RAW_IMAGE_SIZES.get(image_ref.tile)}'
@@ -135,14 +136,3 @@ class BuildTrainDataset(Module):
 
         df.to_csv(f'{self._io.config.base_local_dir}/operation_records/train_features.csv', index=False)
 
-
-if __name__ == '__main__':
-    from config.config import Config
-    from io_manager.io_manager import IO
-    from config.io_config import IOConfig
-
-    # config = Config()
-    # io_config = IOConfig()
-    # io = IO(io_config)
-    #
-    # get_features()
