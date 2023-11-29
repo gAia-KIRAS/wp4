@@ -7,7 +7,7 @@ RECORDS_CD_FILE_COLUMNS = ['cd_id', 'threshold', 'tile', 'year', 'filename_from'
                            'timestamp']
 RESULTS_CD_FILE_COLUMNS = ['cd_id', 'threshold', 'tile', 'year', 'i', 'j', 'detected_breakpoint', 'd_prob', 'timestamp',
                            'lat', 'lon']
-IMAGE_TYPES = ['raw', 'crop', 'nci', 'testing', 'ground_truth', 'delta', 'cprob']
+IMAGE_TYPES = ['raw', 'crop', 'nci', 'testing', 'delta', 'cprob']
 
 RAW_IMAGE_SIZES = {
     '33TUM': (10980, 10980),
@@ -82,7 +82,7 @@ class ImageRef:
         year: year of the data
         tile: Sentinel tile
         product: product type. Can be ['NDVI_raw', 'B02', 'B03', 'B04', 'B08', 'B11', 'SCL']
-        type: (optional) type of the image. Can be ['raw', 'crop']. Also 'testing' for testing purposes.
+        type: (optional) type of the image. Can be  Also 'testing' for testing purposes.
         tile_ref: (optional) TileRef object with the reference to the tile.
         If not set, year, tile and product must be set.
     """

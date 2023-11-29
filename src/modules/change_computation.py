@@ -42,6 +42,7 @@ class ChangeComputation(Module):
             'CD can only be applied to NDVI_reconstructed'
 
         images_df = self._io.filter_all_images(image_type='nci', filters=self._config.filters)
+
         raw_images_df = self._io.filter_all_images(image_type='raw', filters=self._config.filters)
 
         # Get all images that still have no computed CD

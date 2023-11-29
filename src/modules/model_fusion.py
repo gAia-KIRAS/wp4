@@ -149,7 +149,6 @@ class ModelFusion(Module):
             cal_weather['temp_std'] = [time_window.temp.std()]
         return cal_weather
 
-
     def _merge_calc_features(self, positives, df_weather):
         common_points = gpd.sjoin_nearest(positives, df_weather[df_weather.time == "2018-04-01"],
                                           how='inner', lsuffix='inv', rsuffix='weather')
