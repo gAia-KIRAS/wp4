@@ -44,7 +44,7 @@ class Evaluation(Module):
             self._train_feat = df[['row', 'column', 'year', 'tile', 'date']].rename(
                 columns={'date': 'date_pred'}
             )
-            self._train_feat['date'] = pd.to_datetime(self._train_feat['date'], format='%Y-%m-%d')
+            self._train_feat['date_pred'] = pd.to_datetime(self._train_feat['date_pred'], format='%Y-%m-%d')
         except FileNotFoundError:
             self._train_feat = pd.DataFrame(columns=['row', 'column', 'year', 'tile', 'date_pred'])
 
@@ -213,7 +213,7 @@ class Evaluation(Module):
         results_gt_poly.loc[results_gt_poly['landslide_id'].notnull(), 'y'] = 1
         detected_landslide_ids += results_gt_poly['landslide_id'].unique().tolist()
         detected_landslide_ids = [x for x in detected_landslide_ids if not np.isnan(x)]
-        results_gt_poly = (results_gt_poly.groupby(['i', 'j', 'date_pred', 'lat', 'lon'], as_index=False).
+        results_gt_poly = (results_gt_poly.groupby(['row', 'column', 'date_pred', 'lat', 'lon'], as_index=False).
                            agg({'y': 'max'}))
         return detected_landslide_ids, landslide_ids, results_gt_poly
 
@@ -230,13 +230,13 @@ class Evaluation(Module):
             eval_df: table with the evaluation results
         """
         # Merge results
-        eval_df = results[['i', 'j', 'date_pred', 'lat', 'lon', 'year', 'tile']].drop_duplicates()
+        eval_df = results[['row', 'column', 'date_pred', 'lat', 'lon', 'year', 'tile']].drop_duplicates()
         if self._config.eval_conf['type'] != 'polygons':
-            eval_df = eval_df.merge(results_gt[['i', 'j', 'date_pred', 'lat', 'lon', 'y']].rename(
-                columns={'y': 'y_points'}), on=['i', 'j', 'date_pred', 'lat', 'lon'], how='left')
+            eval_df = eval_df.merge(results_gt[['row', 'column', 'date_pred', 'lat', 'lon', 'y']].rename(
+                columns={'y': 'y_points'}), on=['row', 'column', 'date_pred', 'lat', 'lon'], how='left')
         if self._config.eval_conf['type'] != 'points':
-            eval_df = eval_df.merge(results_gt_poly[['i', 'j', 'date_pred', 'lat', 'lon', 'y']].rename(
-                columns={'y': 'y_poly'}), on=['i', 'j', 'date_pred', 'lat', 'lon'], how='left')
+            eval_df = eval_df.merge(results_gt_poly[['row', 'column', 'date_pred', 'lat', 'lon', 'y']].rename(
+                columns={'y': 'y_poly'}), on=['row', 'column', 'date_pred', 'lat', 'lon'], how='left')
         # Create y column (y_points or y_poly)
         if self._config.eval_conf['type'] == 'points':
             eval_df['y'] = eval_df['y_points']
@@ -376,11 +376,12 @@ class Evaluation(Module):
         if self._tile_filters:
             results = results[results['tile'].isin(self._tile_filters)]
         results['date'] = pd.to_datetime(results['date'], format='%Y-%m-%d')
+        results.rename(columns={'date': 'date_pred'}, inplace=True)
         assert len(results) > 0, f'No results found for cd_id {self._cd_id}'
 
         # Remove points that were in self._train_feat
         self._train_feat['aux'] = 1
-        results = results.merge(self._train_feat, on=['i', 'j', 'year', 'tile', 'date_pred'], how='left')
+        results = results.merge(self._train_feat, on=['row', 'column', 'year', 'tile', 'date_pred'], how='left')
         results = results[results['aux'].isnull()].drop(columns=['aux'])
 
         # Convert to GeoDataFrame using the coordinates
