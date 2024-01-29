@@ -275,7 +275,8 @@ class Evaluation(Module):
         # Calculate the precision
         precision = tp / (tp + fp)
         # Calculate the recall: how many of the landslides were detected
-        recall = len(detected_landslide_ids) / len(landslide_ids)
+        #recall = len(detected_landslide_ids) / len(landslide_ids)
+        recall = tp / len(landslide_ids)
         return fp, tp, precision, recall
 
     @staticmethod
