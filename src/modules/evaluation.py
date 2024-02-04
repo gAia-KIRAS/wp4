@@ -95,12 +95,12 @@ class Evaluation(Module):
                 detected_landslide_ids, dim, landslide_ids, results)
 
         if self._config.eval_conf['type'] != 'points':
-            detected_landslide_ids, landslide_ids, results_gt_poly = self.match_with_polygon_inventory(
+            detected_landslide_ids, landslide_ids, results_gt_poly, total_polygon_pixels = self.match_with_polygon_inventory(
                 detected_landslide_ids, dim, landslide_ids, results)
 
         eval_df = self.combine_results(results, results_gt, results_gt_poly)
-        fp, tp, precision, recall = self.calculate_results(detected_landslide_ids, eval_df, landslide_ids, results)
-        self.print_general_results(detected_landslide_ids, fp, landslide_ids, precision, recall, tp)
+        fp, tp, precision, recall = self.calculate_results(detected_landslide_ids, eval_df, landslide_ids, total_polygon_pixels, results)
+        self.print_general_results(detected_landslide_ids, fp, landslide_ids, total_polygon_pixels, precision, recall, tp)
         self.disaggregate_results(eval_df, results)
 
         if self._build_train_dataset:
@@ -213,7 +213,8 @@ class Evaluation(Module):
         # Load polygon inventory
         inventory = self.load_polygon_inventory(dim)
         landslide_ids += inventory['landslide_id'].unique().tolist()
-        print(f'Loaded {len(inventory)} inventory entries for cd_id {self._cd_id}')
+        total_inventory_pixels = inventory['pixel_count'].sum()
+        print(f'Loaded {len(inventory)} inventory polygon entries for cd_id {self._cd_id}, containing {total_inventory_pixels} gt pixels')
 
         # For every prediction, add 0 / 1 depending on whether there is a close match with the inventory
         results_gt_poly = gpd.sjoin(results, inventory, how='left', predicate='intersects')
@@ -223,7 +224,7 @@ class Evaluation(Module):
         detected_landslide_ids = [x for x in detected_landslide_ids if not np.isnan(x)]
         results_gt_poly = (results_gt_poly.groupby(['row', 'column', 'date_pred', 'lat', 'lon'], as_index=False).
                            agg({'y': 'max'}))
-        return detected_landslide_ids, landslide_ids, results_gt_poly
+        return detected_landslide_ids, landslide_ids, results_gt_poly, total_inventory_pixels
 
     def combine_results(self, results, results_gt, results_gt_poly) -> pd.DataFrame:
         """
@@ -256,7 +257,7 @@ class Evaluation(Module):
         return eval_df
 
     @staticmethod
-    def calculate_results(detected_landslide_ids, eval_df, landslide_ids, results) -> tuple:
+    def calculate_results(detected_landslide_ids, eval_df, landslide_ids, total_polygon_pixels, results) -> tuple:
         """
         Calculates the evaluation results: tp, fp, precision, recall
 
@@ -276,11 +277,11 @@ class Evaluation(Module):
         precision = tp / (tp + fp)
         # Calculate the recall: how many of the landslides were detected
         #recall = len(detected_landslide_ids) / len(landslide_ids)
-        recall = tp / len(landslide_ids)
+        recall = tp / total_polygon_pixels
         return fp, tp, precision, recall
 
     @staticmethod
-    def print_general_results(detected_landslide_ids, fp, landslide_ids, precision, recall, tp) -> None:
+    def print_general_results(detected_landslide_ids, fp, landslide_ids, total_polygon_pixels, precision, recall, tp) -> None:
         """
         Prints the general evaluation results.
 
@@ -300,7 +301,7 @@ class Evaluation(Module):
         False positives: {fp}
 
         Precision: {precision}
-        Recall: {round(recall, 3)} = {len(detected_landslide_ids)} / {len(landslide_ids)}
+        Recall: {round(recall, 3)} = {tp} / {total_polygon_pixels}
         """)
 
     def _compute_baseline_evaluation(self, dim, n) -> None:
@@ -326,13 +327,13 @@ class Evaluation(Module):
                 detected_landslide_ids, dim, landslide_ids, random_results)
 
         if self._config.eval_conf['type'] != 'points':
-            detected_landslide_ids, landslide_ids, results_gt_poly = self.match_with_polygon_inventory(
+            detected_landslide_ids, landslide_ids, results_gt_poly, total_polygon_pixels = self.match_with_polygon_inventory(
                 detected_landslide_ids, dim, landslide_ids, random_results)
 
         eval_df = self.combine_results(random_results, results_gt, results_gt_poly)
-        fp, tp, precision, recall = self.calculate_results(detected_landslide_ids, eval_df, landslide_ids,
+        fp, tp, precision, recall = self.calculate_results(detected_landslide_ids, eval_df, landslide_ids, total_polygon_pixels,
                                                            random_results)
-        self.print_general_results(detected_landslide_ids, fp, landslide_ids, precision, recall, tp)
+        self.print_general_results(detected_landslide_ids, fp, landslide_ids, total_polygon_pixels, precision, recall, tp)
         self.disaggregate_results(eval_df, random_results)
         print(f'-------------------\n'
               f'End of baseline evaluation for cd_id {self._cd_id}'
@@ -456,7 +457,9 @@ class Evaluation(Module):
         """
         inventory = gpd.read_file(self._io.config.inventory_poly_path['shp'])
         inventory.to_crs(self._CRS, inplace=True)
-        inventory = inventory[['OBJECTID', 'DATUM_VON', 'geometry']].rename(
+        inventory['pixel_count'] = inventory[['SHAPE_AREA']] / 100
+
+        inventory = inventory[['OBJECTID', 'DATUM_VON', 'geometry', 'pixel_count']].rename(
             columns={'OBJECTID': 'landslide_id', 'DATUM_VON': 'date'})
 
         # Filter by coordinates (geometry object is a POLYGON)
