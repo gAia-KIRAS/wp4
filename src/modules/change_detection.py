@@ -13,7 +13,7 @@ import numpy as np
 
 
 import os
-os.environ['PROJ_LIB'] = '/home/salva/miniconda3/envs/wp4_env/share/proj'
+os.environ['PROJ_LIB'] = '/home/siposova/miniconda3/envs/wp4_env/share/proj'
 
 
 class ChangeDetection(Module):
