@@ -41,7 +41,9 @@ class IO:
         try:
             self._ssh_client.connect(self._config.server_name,
                                      username=self._config.username,
-                                     password=self._config.password)
+                                     password=self._config.password,
+                                     look_for_keys=False,
+                                     allow_agent=False)
         except Exception as e:
             raise Exception(f'Error: Could not connect to remote server. '
                             f'Original error: {e}')
