@@ -6,11 +6,12 @@ from config.config import Config
 from modules.build_train_dataset import BuildTrainDataset
 from modules.change_computation import ChangeComputation
 from modules.change_detection import ChangeDetection
-from modules.nci import NCI
+#from modules.nci import NCI
 from modules.evaluation import Evaluation
 from config.io_config import IOConfig
 from io_manager.io_manager import IO
 from modules.intersect_with_aoi import IntersectAOI
+from modules.model_fusion import ModelFusion
 
 
 def parse_arguments():
@@ -45,11 +46,12 @@ if __name__ == "__main__":
 
     module = {
         'crop': IntersectAOI,
-        'nci': NCI,
+#        'nci': NCI,
         'cd': ChangeDetection,
         'delta': ChangeComputation,
         'eval': Evaluation,
         'btds': BuildTrainDataset,
+        'fusion': ModelFusion
     }.get(config.execute, KeyError(f'{config.execute} is not a valid module.'))(config=config, io=io_manager)
 
     if args.server_execution:
