@@ -1,3 +1,5 @@
+import sys
+
 import geopandas as gpd
 import pandas as pd
 import numpy as np
@@ -214,7 +216,7 @@ class Evaluation(Module):
         inventory = self.load_polygon_inventory(dim)
         landslide_ids += inventory['landslide_id'].unique().tolist()
         total_inventory_pixels = inventory['pixel_count'].sum()
-        print(f'Loaded {len(inventory)} inventory polygon entries for cd_id {self._cd_id}, containing {total_inventory_pixels} gt pixels')
+        print(f'Loaded {len(inventory)} inventory polygon entries for cd_id {self._cd_id}, containing {int(total_inventory_pixels)} gt pixels')
 
         # For every prediction, add 0 / 1 depending on whether there is a close match with the inventory
         results_gt_poly = gpd.sjoin(results, inventory, how='left', predicate='intersects')
@@ -404,6 +406,8 @@ class Evaluation(Module):
         # Filter according to area of interest
         n_before_filter = len(results)
         results = gpd.sjoin(results, self._aoi, how='inner', predicate='intersects')
+        if len(results) == 0:
+            raise ValueError('No results within AOI were found')
         results.drop(columns=['index_right', 'name', 'area'], inplace=True)
 
         return results, n_before_filter
